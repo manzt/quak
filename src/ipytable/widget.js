@@ -1,49 +1,44 @@
-// @deno-types="npm:htl"
+// @deno-types="npm:htl@0.3.1"
 import { html } from "https://esm.sh/htl@0.3.1";
 // @deno-types="npm:apache-arrow@16.1.0"
 import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
-// @deno-types="npm:@js-temporal/polyfill"
+// @deno-types="npm:@js-temporal/polyfill@0.4.4"
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
-// @deno-types="npm:quick-lru@7.0.0";
-import QuickLRU from "https://esm.sh/quick-lru@7.0.0";
-// @deno-types="npm:@uwdata/mosaic-sql";
+// @deno-types="npm:@uwdata/mosaic-sql@0.9.0";
 import * as sql from "https://esm.sh/@uwdata/mosaic-sql@0.9.0";
+// @deno-types="npm:@preact/signals@1.2.3"
+import * as signals from "https://esm.sh/@preact/signals@1.2.3";
 
-/** @typedef {(query: sql.Query) => AsyncIterator<arrow.Table, arrow.Table>} QueryEngine */
+/** @typedef {(query: sql.Query) => AsyncIterator<arrow.Table, arrow.Table>} RunQuery */
+/** @typedef {{ orderby: Array<{ field: string; order: "asc" | "desc" }>; }} QueryState */
+
+/**
+ * @typedef Model
+ * @property {QueryState} state
+ */
 
 export default () => {
 	/** @type {(query: sql.Query) => AsyncIterator<arrow.Table, arrow.Table>} */
 	let runQuery;
 	return {
-		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<{ _ipc: DataView }>} */
-		initialize({ experimental }) {
-			/** @type {QuickLRU<string, arrow.Table>} */
-			let cache = new QuickLRU({ maxSize: 10 });
-			/** @param {string} sql */
-			async function cachedQuery(sql) {
-				// let table = cache.get(sql);
-				// if (table) return table;
-				let [_, buffers] = await experimental.invoke("_run_query", {
-					sql,
-				});
-				let table = arrow.tableFromIPC(buffers[0]);
-				// cache.set(sql, table);
-				return table;
-			}
+		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<{}>} */
+		initialize({ experimental: { invoke } }) {
 			/**
 			 * @param {sql.Query} query
 			 * @param {number} [batchSize]
 			 * @returns {AsyncIterator<arrow.Table, arrow.Table>}
 			 */
-			function _runQuery(query, batchSize = 256) {
+			function runQueryJupyter(query, batchSize = 256) {
 				let offset = 0;
 				return {
 					async next() {
-						let sql = query
-							.limit(batchSize)
-							.offset(offset)
-							.toString();
-						let table = await cachedQuery(sql);
+						let [_, buffers] = await invoke("_run_query", {
+							sql: query
+								.limit(batchSize)
+								.offset(offset)
+								.toString(),
+						});
+						let table = arrow.tableFromIPC(buffers[0]);
 						offset += batchSize;
 						return {
 							value: table,
@@ -52,9 +47,9 @@ export default () => {
 					},
 				};
 			}
-			runQuery = _runQuery;
+			runQuery = runQueryJupyter;
 		},
-		/** @type {import("npm:@anywidget/types@0.1.9").Render<{ _ipc: DataView }>} */
+		/** @type {import("npm:@anywidget/types@0.1.9").Render<{}>} */
 		async render({ el }) {
 			let dataTableElement = await createArrowDataTable(runQuery);
 			el.appendChild(dataTableElement);
@@ -64,18 +59,63 @@ export default () => {
 
 // Lib
 
+const truncate = {
+	whiteSpace: "nowrap",
+	overflow: "hidden",
+	textOverflow: "ellipsis",
+};
+
 /**
  * @param {import("npm:apache-arrow").Field} field
  * @param {string} width
+ * @param {signals.Signal<"unset" | "asc" | "desc">} sortState
  */
-function thcol(field, width) {
+function thcol(field, width, sortState) {
+	let buttonVisible = signals.signal(false);
+	function toggle() {
+		// @deno-fmt-ignore
+		sortState.value = (/** @type {const} */ ({ unset: "asc", asc: "desc", desc: "unset" }))[sortState.value];
+	}
 	// @deno-fmt-ignore
-	return html.fragment`<th title=${field.name} style=${{ width }}>
-	<div style=${{ display: "flex",  flexDirection: "column", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-		<span style=${{ marginBottom: "5px" }}>${field.name}</span>
-		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
+	let svg = html`<svg style=${{ width: "1.5em" }} fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9L12 5.25L15.75 9" />
+		<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75L15.75 15" />
+	</svg>`;
+	let uparrow = svg.children[0];
+	let downarrow = svg.children[1];
+	signals.effect(() => {
+		uparrow.setAttribute("stroke", "var(--moon-gray)");
+		downarrow.setAttribute("stroke", "var(--moon-gray)");
+		// @deno-fmt-ignore
+		let element = { "asc": uparrow, "desc": downarrow, "unset": null }[sortState.value];
+		element?.setAttribute("stroke", "var(--dark-gray)");
+	});
+	// @deno-fmt-ignore
+	let buttonSpan = html`<span
+		aria-role="button"
+		style=${{ cursor: "pointer", backgroundColor: "var(--white)", userSelect: "none" }}
+		onclick=${toggle}>${svg}</span>`;
+	// @deno-fmt-ignore
+	let th = html`<th title=${field.name} style=${{ width }}>
+	<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+		<span style=${{ marginBottom: "5px", maxWidth: "250px", ...truncate }}>${field.name}</span>
+		${buttonSpan}
 	</div>
+	<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
 </th>`;
+
+	signals.effect(() => {
+		buttonSpan.style.visibility = buttonVisible.value ? "visible" : "hidden";
+	});
+
+	th.addEventListener("mouseenter", () => {
+		if (sortState.value === "unset") buttonVisible.value = true;
+	});
+
+	th.addEventListener("mouseleave", () => {
+		if (sortState.value === "unset") buttonVisible.value = false;
+	});
+	return th;
 }
 
 // Faux HTMLElement that we don't need to add to `customElements`.
@@ -94,21 +134,36 @@ class _HTMLElement {
 }
 
 class ArrowDataTable extends _HTMLElement {
-	/** @type {sql.Query} */
-	#query = new sql.Query().select("*").from("df");
-	/** @type {QueryEngine} */
+	/** @type {RunQuery} */
 	#runQuery;
+	/** @type {QueryState} */
+	#queryState;
 
-	/** @param {QueryEngine} runQuery */
+	/** @type {() => Promise<void>} */
+	#resetTable = async () => {};
+
+	/** @param {RunQuery} runQuery */
 	constructor(runQuery) {
 		super();
-		this.#runQuery = runQuery;
 		{
 			// apply styles
 			let style = document.createElement("style");
 			style.textContent = STYLES;
 			this.shadowRoot?.appendChild(style);
 		}
+		this.#runQuery = runQuery;
+		this.#queryState = { orderby: [] };
+	}
+
+	#fetchTable() {
+		let query = new sql.Query().select("*").from("df");
+		if (this.#queryState.orderby.length > 0) {
+			let exprs = this.#queryState.orderby.map((o) => {
+				return o.order === "asc" ? o.field : sql.desc(o.field);
+			});
+			query = query.orderby(...exprs);
+		}
+		return this.#runQuery(query);
 	}
 
 	async render() {
@@ -122,20 +177,37 @@ class ArrowDataTable extends _HTMLElement {
 		/** @type {HTMLDivElement} */
 		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
 
-		let batchIterator = this.#runQuery(this.#query);
+		let batchIterator = this.#fetchTable();
 		let batchResult = await batchIterator.next();
 
-		let cols = batchResult.value.schema.fields.map((field) => field.name);
-		let format = formatof(batchResult.value.schema);
-		let classes = classof(batchResult.value.schema);
+		let schema = batchResult.value.schema;
+		let cols = schema.fields.map((field) => field.name);
+		let format = formatof(schema);
+		let classes = classof(schema);
 
 		let tbody = html`<tbody>`;
 		// @deno-fmt-ignore
 		let thead = html`<thead>
 			<tr style=${{ height: headerHeight }}>
 				<th></th>
-				${batchResult.value.schema.fields.map((field) => thcol(field, columnWidth))}
-				<th style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></th>
+				${schema.fields.map((field) => {
+					/** @type {signals.Signal<"unset" | "asc" | "desc">} */
+					let toggle = signals.signal("unset");
+					signals.effect(() => {
+						let orderby = this.#queryState.orderby.filter((o) => o.field !== field.name);
+						if (toggle.value !== "unset") {
+							orderby.unshift({ field: field.name, order: toggle.value });
+						}
+						this.#queryState.orderby = orderby;
+						this.#resetTable();
+					});
+					return thcol(field, columnWidth, toggle);
+				})}
+				<th style=${{
+			width: "99%",
+			borderLeft: "none",
+			borderRight: "none",
+		}}></th>
 			</tr>
 		</thead>`;
 
@@ -158,6 +230,16 @@ class ArrowDataTable extends _HTMLElement {
 		root.appendChild(
 			html.fragment`<table style=${{ tableLayout }}>${thead}${tbody}</table>`
 		);
+
+		this.#resetTable = async () => {
+			batchIterator = this.#fetchTable();
+			batchResult = await batchIterator.next();
+			iterator = batchResult.value[Symbol.iterator]();
+			tbody.innerHTML = "";
+			iterindex = 0;
+			root.scrollTop = 0;
+			appendRows(rows * 2);
+		};
 
 		/**
 		 * Number of rows to append
@@ -356,7 +438,7 @@ th {
   background: var(--white);
   border-bottom: solid 1px var(--light-silver);
   border-left: solid 1px var(--light-silver);
-  padding: 5px 7px;
+  padding: 5px 6px;
 }
 
 .number, .date {
@@ -408,7 +490,7 @@ function assert(condition, message) {
 }
 
 /**
- * @param {QueryEngine} runQuery
+ * @param {RunQuery} runQuery
  * @returns {Promise<HTMLElement>}
  */
 async function createArrowDataTable(runQuery) {
