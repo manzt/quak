@@ -4,15 +4,62 @@ import { html } from "https://esm.sh/htl@0.3.1";
 import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
 // @deno-types="npm:@js-temporal/polyfill"
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
+// @deno-types="npm:quick-lru@7.0.0";
+import QuickLRU from "https://esm.sh/quick-lru@7.0.0";
+// @deno-types="npm:@uwdata/mosaic-sql";
+import * as sql from "https://esm.sh/@uwdata/mosaic-sql@0.9.0";
 
-export default {
-	/** @type {import("npm:@anywidget/types").Render<{ _ipc: DataView }>} */
-	render({ model, el }) {
-		let ipc = model.get("_ipc");
-		let table = arrow.tableFromIPC(ipc);
-		let dataTableElement = createArrowDataTable(table);
-		el.appendChild(dataTableElement);
-	},
+/** @typedef {(query: sql.Query) => AsyncIterator<arrow.Table, arrow.Table>} QueryEngine */
+
+export default () => {
+	/** @type {(query: sql.Query) => AsyncIterator<arrow.Table, arrow.Table>} */
+	let runQuery;
+	return {
+		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<{ _ipc: DataView }>} */
+		initialize({ experimental }) {
+			/** @type {QuickLRU<string, arrow.Table>} */
+			let cache = new QuickLRU({ maxSize: 10 });
+			/** @param {string} sql */
+			async function cachedQuery(sql) {
+				// let table = cache.get(sql);
+				// if (table) return table;
+				let [_, buffers] = await experimental.invoke("_run_query", {
+					sql,
+				});
+				let table = arrow.tableFromIPC(buffers[0]);
+				// cache.set(sql, table);
+				return table;
+			}
+			/**
+			 * @param {sql.Query} query
+			 * @param {number} [batchSize]
+			 * @returns {AsyncIterator<arrow.Table, arrow.Table>}
+			 */
+			function _runQuery(query, batchSize = 256) {
+				let offset = 0;
+				return {
+					async next() {
+						let sql = query
+							.limit(batchSize)
+							.offset(offset)
+							.toString();
+						let table = await cachedQuery(sql);
+						offset += batchSize;
+						return {
+							value: table,
+							done: table.numRows < batchSize,
+						};
+					},
+				};
+			}
+			runQuery = _runQuery;
+		},
+		/** @type {import("npm:@anywidget/types@0.1.9").Render<{ _ipc: DataView }>} */
+		async render({ el }) {
+			let dataTableElement = await createArrowDataTable(runQuery);
+			el.appendChild(dataTableElement);
+		},
+	};
 };
 
 // Lib
@@ -31,58 +78,63 @@ function thcol(field, width) {
 </th>`;
 }
 
+// Faux HTMLElement that we don't need to add to `customElements`.
+// TODO: Switch to real HTMLElement when building for the browser.
 class _HTMLElement {
 	/** @type {HTMLElement} */
 	#root;
-
 	constructor() {
 		this.#root = document.createElement("div");
 		/** @type {ShadowRoot} */
 		this.shadowRoot = this.#root.attachShadow({ mode: "open" });
 	}
-
 	node() {
 		return this.#root;
 	}
 }
 
 class ArrowDataTable extends _HTMLElement {
-	/** @type {import("npm:apache-arrow").Table} */
-	#table;
+	/** @type {sql.Query} */
+	#query = new sql.Query().select("*").from("df");
+	/** @type {QueryEngine} */
+	#runQuery;
 
-	/** @param {import("npm:apache-arrow").Table} table */
-	constructor(table) {
+	/** @param {QueryEngine} runQuery */
+	constructor(runQuery) {
 		super();
-		this.#table = table;
-	}
-
-	connectedCallback() {
-		let table = this.#table;
+		this.#runQuery = runQuery;
 		{
 			// apply styles
 			let style = document.createElement("style");
 			style.textContent = STYLES;
 			this.shadowRoot?.appendChild(style);
 		}
+	}
+
+	async render() {
 		let rows = 11.5;
 		let rowHeight = 22;
 		let tableLayout = "fixed";
 		let columnWidth = "150px";
 		let headerHeight = "50px";
 		let maxHeight = `${(rows + 1) * rowHeight - 1}px`;
+
 		/** @type {HTMLDivElement} */
 		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
 
-		let cols = table.schema.fields.map((field) => field.name);
-		let format = formatof(table);
-		let classes = classof(table);
+		let batchIterator = this.#runQuery(this.#query);
+		let batchResult = await batchIterator.next();
+
+		let cols = batchResult.value.schema.fields.map((field) => field.name);
+		let format = formatof(batchResult.value.schema);
+		let classes = classof(batchResult.value.schema);
 
 		let tbody = html`<tbody>`;
 		// @deno-fmt-ignore
 		let thead = html`<thead>
 			<tr style=${{ height: headerHeight }}>
 				<th></th>
-				${table.schema.fields.map((field) => thcol(field, columnWidth))}
+				${batchResult.value.schema.fields.map((field) => thcol(field, columnWidth))}
 				<th style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></th>
 			</tr>
 		</thead>`;
@@ -97,88 +149,71 @@ class ArrowDataTable extends _HTMLElement {
 		}}></td>
 		</tr>`;
 
-		/** @type {Array<arrow.StructRowProxy>} */
-		let array = [];
-		/** @type {Array<number>} */
-		let index = [];
-		let iterator = this.#table[Symbol.iterator]();
+		/** @type {IterableIterator<arrow.StructRowProxy>} */
+		let iterator = batchResult.value[Symbol.iterator]();
+		/** @type {number} */
 		let iterindex = 0;
-		let N = this.#table.numRows;
-		let n = minlengthof(rows * 2); // number of currently-shown rows
 
-		/** @param {number} length */
-		function minlengthof(length) {
-			length = Math.floor(length);
-			if (N !== undefined) return Math.min(N, length);
-			if (length <= iterindex) return length;
-			while (length > iterindex) {
-				const { done, value } = iterator.next();
-				if (done) return N = iterindex;
-				index.push(iterindex++);
-				array.push(value);
-			}
-			return iterindex;
-		}
-
+		// @deno-fmt-ignore
 		root.appendChild(
-			html.fragment`<table style=${{
-				tableLayout,
-			}}>${thead}${tbody}</table>`,
+			html.fragment`<table style=${{ tableLayout }}>${thead}${tbody}</table>`
 		);
 
 		/**
-		 * @param {number} i
-		 * @param {number} j
+		 * Number of rows to append
+		 * @param {number} nrows
 		 */
-		function appendRows(i, j) {
-			if (iterindex === i) {
-				for (; i < j; ++i) {
-					appendRow(iterator.next().value, i);
+		async function appendRows(nrows) {
+			while (nrows >= 0) {
+				let result = iterator.next();
+				if (batchResult.done && result.done) {
+					// we've exhausted all rows
+					break;
 				}
-				iterindex = j;
-			} else {
-				for (let k; i < j; ++i) {
-					k = index[i];
-					appendRow(table.get(k), k);
+				if (result.done) {
+					// get the next batch
+					batchResult = await batchIterator.next();
+					// reset the iterator
+					iterator = batchResult.value[Symbol.iterator]();
+					continue;
 				}
+				// append the row and increment the index
+				appendRow(result.value, iterindex);
+				iterindex++;
+				nrows--;
 			}
 		}
 
 		/**
-		 * @param {arrow.StructRowProxy | null} d
+		 * @param {arrow.StructRowProxy} d
 		 * @param {number} i
 		 */
 		function appendRow(d, i) {
 			const itr = tr.cloneNode(true);
-			if (d != null) {
-				let td = itr.childNodes[0];
-				td.appendChild(document.createTextNode(String(i)));
-				for (let j = 0; j < cols.length; ++j) {
-					td = itr.childNodes[j + 1];
-					td.classList.remove("gray");
-					let col = cols[j];
-					/** @type {string} */
-					let stringified = format[col](d[col]);
-					if (shouldGrayoutValue(stringified)) {
-						td.classList.add("gray");
-					}
-					let value = document.createTextNode(stringified);
-					td.appendChild(value);
+			let td = itr.childNodes[0];
+			td.appendChild(document.createTextNode(String(i)));
+			for (let j = 0; j < cols.length; ++j) {
+				td = itr.childNodes[j + 1];
+				td.classList.remove("gray");
+				let col = cols[j];
+				/** @type {string} */
+				let stringified = format[col](d[col]);
+				if (shouldGrayoutValue(stringified)) {
+					td.classList.add("gray");
 				}
+				let value = document.createTextNode(stringified);
+				td.appendChild(value);
 			}
 			tbody.append(itr);
 		}
 
 		// scroll behavior
 		{
-			root.addEventListener("scroll", (event) => {
-				event.stopPropagation();
-				if (
-					root.scrollHeight - root.scrollTop <
-						rows * rowHeight * 1.5 &&
-					n < minlengthof(n + 1)
-				) {
-					appendRows(n, n = minlengthof(n + rows));
+			root.addEventListener("scroll", async () => {
+				let isAtBottom =
+					root.scrollHeight - root.scrollTop < rows * rowHeight * 1.5;
+				if (isAtBottom) {
+					await appendRows(rows);
 				}
 			});
 		}
@@ -207,7 +242,7 @@ class ArrowDataTable extends _HTMLElement {
 			});
 		}
 
-		appendRows(0, n = minlengthof(rows * 2));
+		appendRows(rows * 2);
 		this.shadowRoot?.appendChild(root);
 	}
 }
@@ -373,35 +408,35 @@ function assert(condition, message) {
 }
 
 /**
- * @param {arrow.Table} data
- * @returns {HTMLElement}
+ * @param {QueryEngine} runQuery
+ * @returns {Promise<HTMLElement>}
  */
-function createArrowDataTable(data) {
-	let table = new ArrowDataTable(data);
-	table.connectedCallback();
+async function createArrowDataTable(runQuery) {
+	let table = new ArrowDataTable(runQuery);
+	await table.render();
 	return table.node();
 }
 
 /**
- * @param {import("npm:apache-arrow").Table} table
+ * @param {import("npm:apache-arrow").Schema} schema
  */
-function formatof(table) {
+function formatof(schema) {
 	/** @type {Record<string, (value: any) => string>} */
 	const format = Object.create(null);
-	for (const field of table.schema.fields) {
+	for (const field of schema.fields) {
 		format[field.name] = formatterForDataTypeValue(field.type);
 	}
 	return format;
 }
 
 /**
- * @param {import("npm:apache-arrow").Table} table
+ * @param {import("npm:apache-arrow").Schema} schema
  * @returns {Record<string, "number" | "date">}
  */
-function classof(table) {
+function classof(schema) {
 	/** @type {Record<string, "number" | "date">} */
 	const classes = Object.create(null);
-	for (const field of table.schema.fields) {
+	for (const field of schema.fields) {
 		if (
 			arrow.DataType.isInt(field.type) ||
 			arrow.DataType.isFloat(field.type)
@@ -653,10 +688,4 @@ function shouldGrayoutValue(value) {
 		value === "NaN" ||
 		value === "TODO"
 	);
-}
-
-/**
- * @param {Uint8Array} bytes
- */
-function bytesToHex(bytes, limit = 32) {
 }

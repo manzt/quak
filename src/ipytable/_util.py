@@ -35,11 +35,10 @@ def arrow_table_from_dataframe_protocol(dflike: DataFrameObject) -> "pa.lib.Tabl
     return pi.from_dataframe(dflike)  # type: ignore[no-any-return]
 
 
-def to_ipc(dflike: DataFrameObject) -> memoryview:
+def arrow_to_ipc(table: "pa.lib.Table") -> memoryview:
     import io
     import pyarrow.feather as feather
 
-    table = arrow_table_from_dataframe_protocol(dflike)
     sink = io.BytesIO()
     feather.write_feather(table, sink, compression="uncompressed")
     return sink.getbuffer()

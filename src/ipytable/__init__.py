@@ -2,15 +2,24 @@ import importlib.metadata
 import pathlib
 
 import anywidget
-import traitlets
-from ._util import to_ipc
+import anywidget.experimental
+import duckdb
+from ._util import arrow_table_from_dataframe_protocol, arrow_to_ipc
 
 __version__ = importlib.metadata.version("ipytable")
 
 
 class Widget(anywidget.AnyWidget):
     _esm = pathlib.Path(__file__).parent / "widget.js"
-    _ipc = traitlets.Any().tag(sync=True)
 
     def __init__(self, df):
-        super().__init__(_ipc=to_ipc(df))
+        super().__init__(_length=len(df))
+        con = duckdb.connect(":memory:")
+        con.register("df", arrow_table_from_dataframe_protocol(df))
+        self._con = con
+
+    @anywidget.experimental.command
+    def _run_query(self, msg: dict, buffers: list[bytes]):
+        result = self._con.execute(msg["sql"])
+        ipc = arrow_to_ipc(result.arrow())
+        return None, [ipc.tobytes()]
