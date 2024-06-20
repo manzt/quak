@@ -4,12 +4,10 @@ import { html } from "https://esm.sh/htl@0.3.1";
 import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
 // @deno-types="npm:@js-temporal/polyfill@0.4.4"
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
-// @deno-types="npm:@uwdata/mosaic-sql@0.9.0";
-import * as sql from "https://esm.sh/@uwdata/mosaic-sql@0.9.0";
 // @deno-types="npm:@preact/signals-core@1.6.1"
 import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
 
-/** @typedef {(query: sql.Query) => AsyncIterator<arrow.Table, arrow.Table>} RunQuery */
+/** @typedef {(query: Query) => AsyncIterator<arrow.Table, arrow.Table>} RunQuery */
 /** @typedef {{ orderby: Array<{ field: string; order: "asc" | "desc" }>; }} QueryState */
 
 /** @typedef {{}} Model */
@@ -21,7 +19,7 @@ export default () => {
 		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
 		initialize({ experimental: { invoke } }) {
 			/**
-			 * @param {sql.Query} query
+			 * @param {Query} query
 			 * @param {number} [batchSize]
 			 * @returns {AsyncIterator<arrow.Table, arrow.Table>}
 			 */
@@ -60,6 +58,77 @@ const TRUNCATE = /** @type {const} */ ({
 	overflow: "hidden",
 	textOverflow: "ellipsis",
 });
+
+/** Bare-bones SQL query builder. */
+class Query {
+	constructor() {
+		/** @type {{
+		 *   select: Array<string>;
+		 *   from: string;
+		 *   orderby: Array<{ field: string; order: "asc" | "desc" }>;
+		 *   limit: undefined | number;
+		 *   offset: undefined | number;
+		}} */
+		this.parts = {
+			select: [],
+			from: "",
+			orderby: [],
+			limit: undefined,
+			offset: undefined,
+		};
+	}
+
+	/** @param {string[]} fields */
+	select(...fields) {
+		this.parts.select = fields;
+		return this;
+	}
+
+	/** @param {string} table */
+	from(table) {
+		this.parts.from = table;
+		return this;
+	}
+
+	/** @param {Array<{ field: string; order: "asc" | "desc" }>} exprs */
+	orderby(...exprs) {
+		for (let expr of exprs) this.parts.orderby.push(expr);
+		return this;
+	}
+
+	/** @param {number} count */
+	limit(count) {
+		this.parts.limit = count;
+		return this;
+	}
+
+	/** @param {number} count */
+	offset(count) {
+		this.parts.offset = count;
+		return this;
+	}
+
+	/** @returns {string} */
+	toString() {
+		let query = `SELECT ${
+			this.parts.select.join(", ")
+		} FROM ${this.parts.from}`;
+		if (this.parts.orderby.length) {
+			query += ` ORDER BY ${
+				// @deno-fmt-ignore
+				this.parts.orderby
+					.map((o) => `${o.field} ${o.order.toUpperCase()} NULLS LAST`)
+					.join(", ")}`;
+		}
+		if (this.parts.limit) {
+			query += ` LIMIT ${this.parts.limit}`;
+		}
+		if (this.parts.offset) {
+			query += ` OFFSET ${this.parts.offset}`;
+		}
+		return query;
+	}
+}
 
 /**
  * @param {arrow.Field} field
@@ -218,13 +287,10 @@ class ArrowDataTable extends _HTMLElement {
 	}
 
 	#fetchTable() {
-		let query = new sql.Query().select("*").from("df");
-		if (this.#queryState.orderby.length > 0) {
-			let exprs = this.#queryState.orderby.map((o) => {
-				return o.order === "asc" ? o.field : sql.desc(o.field);
-			});
-			query = query.orderby(...exprs);
-		}
+		let query = new Query()
+			.select("*")
+			.from("df")
+			.orderby(...this.#queryState.orderby);
 		this.#eventTarget.dispatchEvent(
 			new CustomEvent("sql", { detail: query.toString() }),
 		);
