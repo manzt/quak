@@ -6,22 +6,19 @@ import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
 // @deno-types="npm:@uwdata/mosaic-sql@0.9.0";
 import * as sql from "https://esm.sh/@uwdata/mosaic-sql@0.9.0";
-// @deno-types="npm:@preact/signals@1.2.3"
-import * as signals from "https://esm.sh/@preact/signals@1.2.3";
+// @deno-types="npm:@preact/signals-core@1.6.1"
+import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
 
 /** @typedef {(query: sql.Query) => AsyncIterator<arrow.Table, arrow.Table>} RunQuery */
 /** @typedef {{ orderby: Array<{ field: string; order: "asc" | "desc" }>; }} QueryState */
 
-/**
- * @typedef Model
- * @property {QueryState} state
- */
+/** @typedef {{}} Model */
 
 export default () => {
-	/** @type {(query: sql.Query) => AsyncIterator<arrow.Table, arrow.Table>} */
+	/** @type {RunQuery} */
 	let runQuery;
 	return {
-		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<{}>} */
+		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
 		initialize({ experimental: { invoke } }) {
 			/**
 			 * @param {sql.Query} query
@@ -49,7 +46,7 @@ export default () => {
 			}
 			runQuery = runQueryJupyter;
 		},
-		/** @type {import("npm:@anywidget/types@0.1.9").Render<{}>} */
+		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
 		async render({ el }) {
 			let dataTableElement = await createArrowDataTable(runQuery);
 			dataTableElement.on("sql", console.log);
@@ -65,12 +62,14 @@ const TRUNCATE = /** @type {const} */ ({
 });
 
 /**
- * @param {import("npm:apache-arrow").Field} field
+ * @param {arrow.Field} field
  * @param {number} minWidth
  * @param {signals.Signal<"unset" | "asc" | "desc">} sortState
  */
 function thcol(field, minWidth, sortState) {
 	let buttonVisible = signals.signal(false);
+	let width = signals.signal(minWidth);
+
 	function toggle() {
 		// @deno-fmt-ignore
 		sortState.value = (/** @type {const} */ ({ unset: "asc", asc: "desc", desc: "unset" }))[sortState.value];
@@ -106,7 +105,7 @@ function thcol(field, minWidth, sortState) {
 		style=${{ cursor: "pointer", backgroundColor: "var(--white)", userSelect: "none" }}
 		onmousedown=${toggle}>${svg}</span>`;
 	// @deno-fmt-ignore
-	let th = html`<th title=${field.name} style=${{ width: `${minWidth}px` }}>
+	let th = html`<th title=${field.name}>
 	<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 		<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
 		${buttonSpan}
@@ -117,6 +116,10 @@ function thcol(field, minWidth, sortState) {
 
 	signals.effect(() => {
 		buttonSpan.style.visibility = buttonVisible.value ? "visible" : "hidden";
+	});
+
+	signals.effect(() => {
+		th.style.width = `${width.value}px`;
 	});
 
 	th.addEventListener("mouseover", () => {
@@ -135,7 +138,7 @@ function thcol(field, minWidth, sortState) {
 			parseFloat(getComputedStyle(th).paddingRight);
 		function onMouseMove(/** @type {MouseEvent} */ event) {
 			let dx = event.clientX - startX;
-			th.style.width = `${Math.max(minWidth, startWidth + dx)}px`;
+			width.value = Math.max(minWidth, startWidth + dx);
 			verticalResizeHandle.style.backgroundColor = "var(--light-silver)";
 		}
 		function onMouseUp() {
@@ -182,10 +185,17 @@ class ArrowDataTable extends _HTMLElement {
 	/** @type {() => Promise<void>} */
 	#resetTable = async () => {};
 
+	/** @type {{ maxHeight?: number }} */
+	#options;
+
+	/** @type {EventTarget} */
 	#eventTarget = new EventTarget();
 
-	/** @param {RunQuery} runQuery */
-	constructor(runQuery) {
+	/**
+	 * @param {RunQuery} runQuery
+	 * @param {{ maxHeight?: number }} options
+	 */
+	constructor(runQuery, options = {}) {
 		super();
 		{
 			// apply styles
@@ -195,6 +205,7 @@ class ArrowDataTable extends _HTMLElement {
 		}
 		this.#runQuery = runQuery;
 		this.#queryState = { orderby: [] };
+		this.#options = options;
 	}
 
 	/**
@@ -224,12 +235,18 @@ class ArrowDataTable extends _HTMLElement {
 	}
 
 	async render() {
-		let rows = 11.5;
 		let rowHeight = 22;
+		let rows = 11.5;
 		let tableLayout = "fixed";
 		let columnWidth = 125;
 		let headerHeight = "50px";
 		let maxHeight = `${(rows + 1) * rowHeight - 1}px`;
+
+		// if maxHeight is set, calculate the number of rows to display
+		if (this.#options.maxHeight) {
+			rows = Math.floor(this.#options.maxHeight / rowHeight);
+			maxHeight = `${this.#options.maxHeight}px`;
+		}
 
 		/** @type {HTMLDivElement} */
 		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
@@ -556,9 +573,7 @@ async function createArrowDataTable(runQuery) {
 	return table;
 }
 
-/**
- * @param {import("npm:apache-arrow").Schema} schema
- */
+/** @param {arrow.Schema} schema */
 function formatof(schema) {
 	/** @type {Record<string, (value: any) => string>} */
 	const format = Object.create(null);
@@ -569,7 +584,7 @@ function formatof(schema) {
 }
 
 /**
- * @param {import("npm:apache-arrow").Schema} schema
+ * @param {arrow.Schema} schema
  * @returns {Record<string, "number" | "date">}
  */
 function classof(schema) {
