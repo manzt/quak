@@ -47,7 +47,6 @@ export default () => {
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
 		async render({ el }) {
 			let dataTableElement = await createArrowDataTable(runQuery);
-			dataTableElement.on("sql", console.log);
 			el.appendChild(dataTableElement.node());
 		},
 	};
@@ -254,9 +253,6 @@ class ArrowDataTable extends _HTMLElement {
 	/** @type {{ maxHeight?: number }} */
 	#options;
 
-	/** @type {EventTarget} */
-	#eventTarget = new EventTarget();
-
 	/**
 	 * @param {RunQuery} runQuery
 	 * @param {{ maxHeight?: number }} options
@@ -274,26 +270,12 @@ class ArrowDataTable extends _HTMLElement {
 		this.#options = options;
 	}
 
-	/**
-	 * @param {"sql"} event
-	 * @param {(sql: string) => void} callback
-	 */
-	on(event, callback) {
-		if (event !== "sql") return;
-		this.#eventTarget.addEventListener(event, (event) => {
-			assert(event instanceof CustomEvent, "Expected CustomEvent");
-			callback(event.detail);
-		});
-	}
-
 	#fetchTable() {
 		let query = new Query()
 			.select("*")
 			.from("df")
 			.orderby(...this.#queryState.orderby);
-		this.#eventTarget.dispatchEvent(
-			new CustomEvent("sql", { detail: query.toString() }),
-		);
+		console.debug(query.toString());
 		return this.#runQuery(query);
 	}
 
