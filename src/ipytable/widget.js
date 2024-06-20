@@ -57,20 +57,18 @@ export default () => {
 	};
 };
 
-// Lib
-
-const truncate = {
+const TRUNCATE = /** @type {const} */ ({
 	whiteSpace: "nowrap",
 	overflow: "hidden",
 	textOverflow: "ellipsis",
-};
+});
 
 /**
  * @param {import("npm:apache-arrow").Field} field
- * @param {string} width
+ * @param {number} minWidth
  * @param {signals.Signal<"unset" | "asc" | "desc">} sortState
  */
-function thcol(field, width, sortState) {
+function thcol(field, minWidth, sortState) {
 	let buttonVisible = signals.signal(false);
 	function toggle() {
 		// @deno-fmt-ignore
@@ -90,17 +88,29 @@ function thcol(field, width, sortState) {
 		let element = { "asc": uparrow, "desc": downarrow, "unset": null }[sortState.value];
 		element?.setAttribute("stroke", "var(--dark-gray)");
 	});
+	/** @type {HTMLDivElement} */
+	let verticalResizeHandle = html`<div style=${{
+		width: "5px",
+		height: "100%",
+		backgroundColor: "transparent",
+		position: "absolute",
+		right: "-2.5px",
+		top: "0",
+		cursor: "ew-resize",
+		zIndex: "1",
+	}}></div>`;
 	// @deno-fmt-ignore
 	let buttonSpan = html`<span
 		aria-role="button"
 		style=${{ cursor: "pointer", backgroundColor: "var(--white)", userSelect: "none" }}
-		onclick=${toggle}>${svg}</span>`;
+		onmousedown=${toggle}>${svg}</span>`;
 	// @deno-fmt-ignore
-	let th = html`<th title=${field.name} style=${{ width }}>
+	let th = html`<th title=${field.name} style=${{ width: `${minWidth}px` }}>
 	<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-		<span style=${{ marginBottom: "5px", maxWidth: "250px", ...truncate }}>${field.name}</span>
+		<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
 		${buttonSpan}
 	</div>
+	${verticalResizeHandle}
 	<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
 </th>`;
 
@@ -108,13 +118,38 @@ function thcol(field, width, sortState) {
 		buttonSpan.style.visibility = buttonVisible.value ? "visible" : "hidden";
 	});
 
-	th.addEventListener("mouseenter", () => {
+	th.addEventListener("mouseover", () => {
 		if (sortState.value === "unset") buttonVisible.value = true;
 	});
 
 	th.addEventListener("mouseleave", () => {
 		if (sortState.value === "unset") buttonVisible.value = false;
 	});
+
+	verticalResizeHandle.addEventListener("mousedown", (event) => {
+		event.preventDefault();
+		let startX = event.clientX;
+		let startWidth = th.offsetWidth;
+		function onMouseMove(/** @type {MouseEvent} */ event) {
+			let dx = event.clientX - startX;
+			th.style.width = `${Math.max(minWidth, startWidth + dx)}px`;
+			verticalResizeHandle.style.backgroundColor = "var(--light-silver)";
+		}
+		function onMouseUp() {
+			verticalResizeHandle.style.backgroundColor = "transparent";
+			document.removeEventListener("mousemove", onMouseMove);
+			document.removeEventListener("mouseup", onMouseUp);
+		}
+		document.addEventListener("mousemove", onMouseMove);
+		document.addEventListener("mouseup", onMouseUp);
+	});
+	verticalResizeHandle.addEventListener("mouseover", () => {
+		verticalResizeHandle.style.backgroundColor = "var(--light-silver)";
+	});
+	verticalResizeHandle.addEventListener("mouseleave", () => {
+		verticalResizeHandle.style.backgroundColor = "transparent";
+	});
+
 	return th;
 }
 
@@ -170,7 +205,7 @@ class ArrowDataTable extends _HTMLElement {
 		let rows = 11.5;
 		let rowHeight = 22;
 		let tableLayout = "fixed";
-		let columnWidth = "150px";
+		let columnWidth = 125;
 		let headerHeight = "50px";
 		let maxHeight = `${(rows + 1) * rowHeight - 1}px`;
 
