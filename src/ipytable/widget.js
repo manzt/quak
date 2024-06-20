@@ -70,17 +70,39 @@ function thcol(field, minWidth, sortState) {
 	let buttonVisible = signals.signal(false);
 	let width = signals.signal(minWidth);
 
-	function toggle() {
-		// @deno-fmt-ignore
-		sortState.value = (/** @type {const} */ ({ unset: "asc", asc: "desc", desc: "unset" }))[sortState.value];
+	function nextSortState() {
+		// simple state machine
+		// unset -> asc -> desc -> unset
+		sortState.value = /** @type {const} */ ({
+			"unset": "asc",
+			"asc": "desc",
+			"desc": "unset",
+		})[sortState.value];
 	}
+
 	// @deno-fmt-ignore
 	let svg = html`<svg style=${{ width: "1.5em" }} fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
 		<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9L12 5.25L15.75 9" />
 		<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75L15.75 15" />
 	</svg>`;
+	/** @type {SVGPathElement} */
 	let uparrow = svg.children[0];
+	/** @type {SVGPathElement} */
 	let downarrow = svg.children[1];
+	/** @type {HTMLDivElement} */
+	let verticalResizeHandle = html`<div class="resize-handle"></div>`;
+	// @deno-fmt-ignore
+	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
+	// @deno-fmt-ignore
+	let th = html`<th title=${field.name}>
+		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
+			${sortButton}
+		</div>
+		${verticalResizeHandle}
+		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
+	</th>`;
+
 	signals.effect(() => {
 		uparrow.setAttribute("stroke", "var(--moon-gray)");
 		downarrow.setAttribute("stroke", "var(--moon-gray)");
@@ -88,34 +110,9 @@ function thcol(field, minWidth, sortState) {
 		let element = { "asc": uparrow, "desc": downarrow, "unset": null }[sortState.value];
 		element?.setAttribute("stroke", "var(--dark-gray)");
 	});
-	/** @type {HTMLDivElement} */
-	let verticalResizeHandle = html`<div style=${{
-		width: "5px",
-		height: "100%",
-		backgroundColor: "transparent",
-		position: "absolute",
-		right: "-2.5px",
-		top: "0",
-		cursor: "ew-resize",
-		zIndex: "1",
-	}}></div>`;
-	// @deno-fmt-ignore
-	let buttonSpan = html`<span
-		aria-role="button"
-		style=${{ cursor: "pointer", backgroundColor: "var(--white)", userSelect: "none" }}
-		onmousedown=${toggle}>${svg}</span>`;
-	// @deno-fmt-ignore
-	let th = html`<th title=${field.name}>
-	<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-		<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
-		${buttonSpan}
-	</div>
-	${verticalResizeHandle}
-	<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
-</th>`;
 
 	signals.effect(() => {
-		buttonSpan.style.visibility = buttonVisible.value ? "visible" : "hidden";
+		sortButton.style.visibility = buttonVisible.value ? "visible" : "hidden";
 	});
 
 	signals.effect(() => {
@@ -551,6 +548,23 @@ td:nth-last-child(2), th:nth-last-child(2) {
 
 tr:first-child td {
 	border-top: solid 1px transparent;
+}
+
+.resize-handle {
+	width: 5px;
+	height: 100%;
+	background-color: transparent;
+	position: absolute;
+	right: -2.5px;
+	top: 0;
+	cursor: ew-resize;
+	z-index: 1;
+}
+
+.sort-button {
+	cursor: pointer;
+	background-color: var(--white);
+	user-select: none;
 }
 `;
 
