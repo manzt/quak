@@ -52,7 +52,8 @@ export default () => {
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<{}>} */
 		async render({ el }) {
 			let dataTableElement = await createArrowDataTable(runQuery);
-			el.appendChild(dataTableElement);
+			dataTableElement.on("sql", console.log);
+			el.appendChild(dataTableElement.node());
 		},
 	};
 };
@@ -129,7 +130,9 @@ function thcol(field, minWidth, sortState) {
 	verticalResizeHandle.addEventListener("mousedown", (event) => {
 		event.preventDefault();
 		let startX = event.clientX;
-		let startWidth = th.offsetWidth;
+		let startWidth = th.offsetWidth -
+			parseFloat(getComputedStyle(th).paddingLeft) -
+			parseFloat(getComputedStyle(th).paddingRight);
 		function onMouseMove(/** @type {MouseEvent} */ event) {
 			let dx = event.clientX - startX;
 			th.style.width = `${Math.max(minWidth, startWidth + dx)}px`;
@@ -143,9 +146,11 @@ function thcol(field, minWidth, sortState) {
 		document.addEventListener("mousemove", onMouseMove);
 		document.addEventListener("mouseup", onMouseUp);
 	});
+
 	verticalResizeHandle.addEventListener("mouseover", () => {
 		verticalResizeHandle.style.backgroundColor = "var(--light-silver)";
 	});
+
 	verticalResizeHandle.addEventListener("mouseleave", () => {
 		verticalResizeHandle.style.backgroundColor = "transparent";
 	});
@@ -177,6 +182,8 @@ class ArrowDataTable extends _HTMLElement {
 	/** @type {() => Promise<void>} */
 	#resetTable = async () => {};
 
+	#eventTarget = new EventTarget();
+
 	/** @param {RunQuery} runQuery */
 	constructor(runQuery) {
 		super();
@@ -190,6 +197,18 @@ class ArrowDataTable extends _HTMLElement {
 		this.#queryState = { orderby: [] };
 	}
 
+	/**
+	 * @param {"sql"} event
+	 * @param {(sql: string) => void} callback
+	 */
+	on(event, callback) {
+		if (event !== "sql") return;
+		this.#eventTarget.addEventListener(event, (event) => {
+			assert(event instanceof CustomEvent, "Expected CustomEvent");
+			callback(event.detail);
+		});
+	}
+
 	#fetchTable() {
 		let query = new sql.Query().select("*").from("df");
 		if (this.#queryState.orderby.length > 0) {
@@ -198,6 +217,9 @@ class ArrowDataTable extends _HTMLElement {
 			});
 			query = query.orderby(...exprs);
 		}
+		this.#eventTarget.dispatchEvent(
+			new CustomEvent("sql", { detail: query.toString() }),
+		);
 		return this.#runQuery(query);
 	}
 
@@ -526,12 +548,12 @@ function assert(condition, message) {
 
 /**
  * @param {RunQuery} runQuery
- * @returns {Promise<HTMLElement>}
+ * @returns {Promise<ArrowDataTable>}
  */
 async function createArrowDataTable(runQuery) {
 	let table = new ArrowDataTable(runQuery);
 	await table.render();
-	return table.node();
+	return table;
 }
 
 /**
