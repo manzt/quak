@@ -162,7 +162,7 @@ function thcol(field, minWidth, sortState) {
 	// @deno-fmt-ignore
 	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
 	// @deno-fmt-ignore
-	/** @type {HTMLTableHeaderCellElement} */
+	/** @type {HTMLTableCellElement} */
 	let th = html`<th title=${field.name}>
 		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
@@ -273,15 +273,10 @@ class ArrowDataTable extends _HTMLElement {
 	 */
 	constructor(runQuery, options = {}) {
 		super();
-		{
-			// apply styles
-			let style = document.createElement("style");
-			style.textContent = STYLES;
-			this.shadowRoot?.appendChild(style);
-		}
 		this.#runQuery = runQuery;
 		this.#queryState = { orderby: [] };
 		this.#options = options;
+		this.shadowRoot.appendChild(html`<style>${STYLES}</style>`);
 	}
 
 	#fetchTable() {
@@ -499,7 +494,7 @@ function isTableRowElement(node) {
 	return node instanceof HTMLTableRowElement;
 }
 
-const STYLES = /* @css */ `\
+const STYLES = /*css*/ `\
 :host {
   all: initial;
   --sans-serif: -apple-system, BlinkMacSystemFont, "avenir next", avenir, helvetica, "helvetica neue", ubuntu, roboto, noto, "segoe ui", arial, sans-serif;
