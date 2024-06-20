@@ -199,7 +199,13 @@ function thcol(field, minWidth, sortState) {
 	th.addEventListener("dblclick", (event) => {
 		// reset column width but we don't want to interfere with someone
 		// double-clicking the sort button
-		if (event.target !== th) return;
+		// if the mouse is within the sort button, don't reset the width
+		if (
+			event.offsetX < sortButton.offsetWidth &&
+			event.offsetY < sortButton.offsetHeight
+		) {
+			return;
+		}
 		width.value = minWidth;
 	});
 
