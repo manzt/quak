@@ -162,6 +162,7 @@ function thcol(field, minWidth, sortState) {
 	// @deno-fmt-ignore
 	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
 	// @deno-fmt-ignore
+	/** @type {HTMLTableHeaderCellElement} */
 	let th = html`<th title=${field.name}>
 		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
@@ -193,6 +194,13 @@ function thcol(field, minWidth, sortState) {
 
 	th.addEventListener("mouseleave", () => {
 		if (sortState.value === "unset") buttonVisible.value = false;
+	});
+
+	th.addEventListener("dblclick", (event) => {
+		// reset column width but we don't want to interfere with someone
+		// double-clicking the sort button
+		if (event.target !== th) return;
+		width.value = minWidth;
 	});
 
 	verticalResizeHandle.addEventListener("mousedown", (event) => {
@@ -250,12 +258,12 @@ class ArrowDataTable extends _HTMLElement {
 	/** @type {() => Promise<void>} */
 	#resetTable = async () => {};
 
-	/** @type {{ maxHeight?: number }} */
+	/** @type {{ height?: number }} */
 	#options;
 
 	/**
 	 * @param {RunQuery} runQuery
-	 * @param {{ maxHeight?: number }} options
+	 * @param {{ height?: number }} options
 	 */
 	constructor(runQuery, options = {}) {
 		super();
@@ -288,9 +296,9 @@ class ArrowDataTable extends _HTMLElement {
 		let maxHeight = `${(rows + 1) * rowHeight - 1}px`;
 
 		// if maxHeight is set, calculate the number of rows to display
-		if (this.#options.maxHeight) {
-			rows = Math.floor(this.#options.maxHeight / rowHeight);
-			maxHeight = `${this.#options.maxHeight}px`;
+		if (this.#options.height) {
+			rows = Math.floor(this.#options.height / rowHeight);
+			maxHeight = `${this.#options.height}px`;
 		}
 
 		/** @type {HTMLDivElement} */
@@ -627,10 +635,11 @@ function assert(condition, message) {
 
 /**
  * @param {RunQuery} runQuery
+ * @param {{ height?: number }} options
  * @returns {Promise<ArrowDataTable>}
  */
-async function createArrowDataTable(runQuery) {
-	let table = new ArrowDataTable(runQuery);
+async function createArrowDataTable(runQuery, options = {}) {
+	let table = new ArrowDataTable(runQuery, options);
 	await table.render();
 	return table;
 }
