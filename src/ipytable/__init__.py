@@ -1,16 +1,6 @@
-import importlib.metadata
-import pathlib
+"""An anywidget for displaying tabular data in a table."""
 
-import anywidget
-import traitlets
-from ._util import to_ipc
+from ._version import __version__
+from ._widget import Widget
 
-__version__ = importlib.metadata.version("ipytable")
-
-
-class Widget(anywidget.AnyWidget):
-    _esm = pathlib.Path(__file__).parent / "widget.js"
-    _ipc = traitlets.Any().tag(sync=True)
-
-    def __init__(self, df):
-        super().__init__(_ipc=to_ipc(df))
+__all__ = ["Widget", "__version__"]

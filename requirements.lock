@@ -17,6 +17,8 @@ comm==0.2.2
     # via ipywidgets
 decorator==5.1.1
     # via ipython
+duckdb==1.0.0
+    # via ipytable
 executing==2.0.1
     # via stack-data
 ipython==8.25.0

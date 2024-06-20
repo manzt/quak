@@ -1,89 +1,346 @@
-// @deno-types="npm:htl"
+// @deno-types="npm:htl@0.3.1"
 import { html } from "https://esm.sh/htl@0.3.1";
 // @deno-types="npm:apache-arrow@16.1.0"
 import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
-// @deno-types="npm:@js-temporal/polyfill"
+// @deno-types="npm:@js-temporal/polyfill@0.4.4"
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
+// @deno-types="npm:@preact/signals-core@1.6.1"
+import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
 
-export default {
-	/** @type {import("npm:@anywidget/types").Render<{ _ipc: DataView }>} */
-	render({ model, el }) {
-		let ipc = model.get("_ipc");
-		let table = arrow.tableFromIPC(ipc);
-		let dataTableElement = createArrowDataTable(table);
-		el.appendChild(dataTableElement);
-	},
+/** @typedef {(query: Query) => AsyncIterator<arrow.Table, arrow.Table>} RunQuery */
+/** @typedef {{ orderby: Array<{ field: string; order: "asc" | "desc" }>; }} QueryState */
+
+/** @typedef {{}} Model */
+
+export default () => {
+	/** @type {RunQuery} */
+	let runQuery;
+	return {
+		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
+		initialize({ experimental: { invoke } }) {
+			/**
+			 * @param {Query} query
+			 * @param {number} [batchSize]
+			 * @returns {AsyncIterator<arrow.Table, arrow.Table>}
+			 */
+			function runQueryJupyter(query, batchSize = 256) {
+				let offset = 0;
+				return {
+					async next() {
+						let [_, buffers] = await invoke("_run_query", {
+							sql: query
+								.limit(batchSize)
+								.offset(offset)
+								.toString(),
+						});
+						let table = arrow.tableFromIPC(buffers[0]);
+						offset += batchSize;
+						return {
+							value: table,
+							done: table.numRows < batchSize,
+						};
+					},
+				};
+			}
+			runQuery = runQueryJupyter;
+		},
+		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
+		async render({ el }) {
+			let dataTableElement = await createArrowDataTable(runQuery);
+			el.appendChild(dataTableElement.node());
+		},
+	};
 };
 
-// Lib
+const TRUNCATE = /** @type {const} */ ({
+	whiteSpace: "nowrap",
+	overflow: "hidden",
+	textOverflow: "ellipsis",
+});
 
-/**
- * @param {import("npm:apache-arrow").Field} field
- * @param {string} width
- */
-function thcol(field, width) {
-	// @deno-fmt-ignore
-	return html.fragment`<th title=${field.name} style=${{ width }}>
-	<div style=${{ display: "flex",  flexDirection: "column", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-		<span style=${{ marginBottom: "5px" }}>${field.name}</span>
-		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
-	</div>
-</th>`;
+/** Bare-bones SQL query builder. */
+class Query {
+	constructor() {
+		/** @type {{
+		 *   select: Array<string>;
+		 *   from: string;
+		 *   orderby: Array<{ field: string; order: "asc" | "desc" }>;
+		 *   limit: undefined | number;
+		 *   offset: undefined | number;
+		}} */
+		this.parts = {
+			select: [],
+			from: "",
+			orderby: [],
+			limit: undefined,
+			offset: undefined,
+		};
+	}
+
+	/** @param {string[]} fields */
+	select(...fields) {
+		this.parts.select = fields;
+		return this;
+	}
+
+	/** @param {string} table */
+	from(table) {
+		this.parts.from = table;
+		return this;
+	}
+
+	/** @param {Array<{ field: string; order: "asc" | "desc" }>} exprs */
+	orderby(...exprs) {
+		for (let expr of exprs) this.parts.orderby.push(expr);
+		return this;
+	}
+
+	/** @param {number} count */
+	limit(count) {
+		this.parts.limit = count;
+		return this;
+	}
+
+	/** @param {number} count */
+	offset(count) {
+		this.parts.offset = count;
+		return this;
+	}
+
+	/** @returns {string} */
+	toString() {
+		let query = `SELECT ${
+			this.parts.select.join(", ")
+		} FROM ${this.parts.from}`;
+		if (this.parts.orderby.length) {
+			query += ` ORDER BY ${
+				// @deno-fmt-ignore
+				this.parts.orderby
+					.map((o) => `${o.field} ${o.order.toUpperCase()} NULLS LAST`)
+					.join(", ")}`;
+		}
+		if (this.parts.limit) {
+			query += ` LIMIT ${this.parts.limit}`;
+		}
+		if (this.parts.offset) {
+			query += ` OFFSET ${this.parts.offset}`;
+		}
+		return query;
+	}
 }
 
+/**
+ * @param {arrow.Field} field
+ * @param {number} minWidth
+ * @param {signals.Signal<"unset" | "asc" | "desc">} sortState
+ */
+function thcol(field, minWidth, sortState) {
+	let buttonVisible = signals.signal(false);
+	let width = signals.signal(minWidth);
+
+	function nextSortState() {
+		// simple state machine
+		// unset -> asc -> desc -> unset
+		sortState.value = /** @type {const} */ ({
+			"unset": "asc",
+			"asc": "desc",
+			"desc": "unset",
+		})[sortState.value];
+	}
+
+	// @deno-fmt-ignore
+	let svg = html`<svg style=${{ width: "1.5em" }} fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9L12 5.25L15.75 9" />
+		<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75L15.75 15" />
+	</svg>`;
+	/** @type {SVGPathElement} */
+	let uparrow = svg.children[0];
+	/** @type {SVGPathElement} */
+	let downarrow = svg.children[1];
+	/** @type {HTMLDivElement} */
+	let verticalResizeHandle = html`<div class="resize-handle"></div>`;
+	// @deno-fmt-ignore
+	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
+	// @deno-fmt-ignore
+	/** @type {HTMLTableHeaderCellElement} */
+	let th = html`<th title=${field.name}>
+		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
+			${sortButton}
+		</div>
+		${verticalResizeHandle}
+		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
+	</th>`;
+
+	signals.effect(() => {
+		uparrow.setAttribute("stroke", "var(--moon-gray)");
+		downarrow.setAttribute("stroke", "var(--moon-gray)");
+		// @deno-fmt-ignore
+		let element = { "asc": uparrow, "desc": downarrow, "unset": null }[sortState.value];
+		element?.setAttribute("stroke", "var(--dark-gray)");
+	});
+
+	signals.effect(() => {
+		sortButton.style.visibility = buttonVisible.value ? "visible" : "hidden";
+	});
+
+	signals.effect(() => {
+		th.style.width = `${width.value}px`;
+	});
+
+	th.addEventListener("mouseover", () => {
+		if (sortState.value === "unset") buttonVisible.value = true;
+	});
+
+	th.addEventListener("mouseleave", () => {
+		if (sortState.value === "unset") buttonVisible.value = false;
+	});
+
+	th.addEventListener("dblclick", (event) => {
+		// reset column width but we don't want to interfere with someone
+		// double-clicking the sort button
+		// if the mouse is within the sort button, don't reset the width
+		if (
+			event.offsetX < sortButton.offsetWidth &&
+			event.offsetY < sortButton.offsetHeight
+		) {
+			return;
+		}
+		width.value = minWidth;
+	});
+
+	verticalResizeHandle.addEventListener("mousedown", (event) => {
+		event.preventDefault();
+		let startX = event.clientX;
+		let startWidth = th.offsetWidth -
+			parseFloat(getComputedStyle(th).paddingLeft) -
+			parseFloat(getComputedStyle(th).paddingRight);
+		function onMouseMove(/** @type {MouseEvent} */ event) {
+			let dx = event.clientX - startX;
+			width.value = Math.max(minWidth, startWidth + dx);
+			verticalResizeHandle.style.backgroundColor = "var(--light-silver)";
+		}
+		function onMouseUp() {
+			verticalResizeHandle.style.backgroundColor = "transparent";
+			document.removeEventListener("mousemove", onMouseMove);
+			document.removeEventListener("mouseup", onMouseUp);
+		}
+		document.addEventListener("mousemove", onMouseMove);
+		document.addEventListener("mouseup", onMouseUp);
+	});
+
+	verticalResizeHandle.addEventListener("mouseover", () => {
+		verticalResizeHandle.style.backgroundColor = "var(--light-silver)";
+	});
+
+	verticalResizeHandle.addEventListener("mouseleave", () => {
+		verticalResizeHandle.style.backgroundColor = "transparent";
+	});
+
+	return th;
+}
+
+// Faux HTMLElement that we don't need to add to `customElements`.
+// TODO: Switch to real HTMLElement when building for the browser.
 class _HTMLElement {
 	/** @type {HTMLElement} */
 	#root;
-
 	constructor() {
 		this.#root = document.createElement("div");
 		/** @type {ShadowRoot} */
 		this.shadowRoot = this.#root.attachShadow({ mode: "open" });
 	}
-
 	node() {
 		return this.#root;
 	}
 }
 
 class ArrowDataTable extends _HTMLElement {
-	/** @type {import("npm:apache-arrow").Table} */
-	#table;
+	/** @type {RunQuery} */
+	#runQuery;
+	/** @type {QueryState} */
+	#queryState;
 
-	/** @param {import("npm:apache-arrow").Table} table */
-	constructor(table) {
+	/** @type {() => Promise<void>} */
+	#resetTable = async () => {};
+
+	/** @type {{ height?: number }} */
+	#options;
+
+	/**
+	 * @param {RunQuery} runQuery
+	 * @param {{ height?: number }} options
+	 */
+	constructor(runQuery, options = {}) {
 		super();
-		this.#table = table;
-	}
-
-	connectedCallback() {
-		let table = this.#table;
 		{
 			// apply styles
 			let style = document.createElement("style");
 			style.textContent = STYLES;
 			this.shadowRoot?.appendChild(style);
 		}
-		let rows = 11.5;
+		this.#runQuery = runQuery;
+		this.#queryState = { orderby: [] };
+		this.#options = options;
+	}
+
+	#fetchTable() {
+		let query = new Query()
+			.select("*")
+			.from("df")
+			.orderby(...this.#queryState.orderby);
+		console.debug(query.toString());
+		return this.#runQuery(query);
+	}
+
+	async render() {
 		let rowHeight = 22;
+		let rows = 11.5;
 		let tableLayout = "fixed";
-		let columnWidth = "150px";
+		let columnWidth = 125;
 		let headerHeight = "50px";
 		let maxHeight = `${(rows + 1) * rowHeight - 1}px`;
+
+		// if maxHeight is set, calculate the number of rows to display
+		if (this.#options.height) {
+			rows = Math.floor(this.#options.height / rowHeight);
+			maxHeight = `${this.#options.height}px`;
+		}
+
 		/** @type {HTMLDivElement} */
 		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
 
-		let cols = table.schema.fields.map((field) => field.name);
-		let format = formatof(table);
-		let classes = classof(table);
+		let batchIterator = this.#fetchTable();
+		let batchResult = await batchIterator.next();
+
+		let schema = batchResult.value.schema;
+		let cols = schema.fields.map((field) => field.name);
+		let format = formatof(schema);
+		let classes = classof(schema);
 
 		let tbody = html`<tbody>`;
 		// @deno-fmt-ignore
 		let thead = html`<thead>
 			<tr style=${{ height: headerHeight }}>
 				<th></th>
-				${table.schema.fields.map((field) => thcol(field, columnWidth))}
-				<th style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></th>
+				${schema.fields.map((field) => {
+					/** @type {signals.Signal<"unset" | "asc" | "desc">} */
+					let toggle = signals.signal("unset");
+					signals.effect(() => {
+						let orderby = this.#queryState.orderby.filter((o) => o.field !== field.name);
+						if (toggle.value !== "unset") {
+							orderby.unshift({ field: field.name, order: toggle.value });
+						}
+						this.#queryState.orderby = orderby;
+						this.#resetTable();
+					});
+					return thcol(field, columnWidth, toggle);
+				})}
+				<th style=${{
+			width: "99%",
+			borderLeft: "none",
+			borderRight: "none",
+		}}></th>
 			</tr>
 		</thead>`;
 
@@ -97,88 +354,81 @@ class ArrowDataTable extends _HTMLElement {
 		}}></td>
 		</tr>`;
 
-		/** @type {Array<arrow.StructRowProxy>} */
-		let array = [];
-		/** @type {Array<number>} */
-		let index = [];
-		let iterator = this.#table[Symbol.iterator]();
+		/** @type {IterableIterator<arrow.StructRowProxy>} */
+		let iterator = batchResult.value[Symbol.iterator]();
+		/** @type {number} */
 		let iterindex = 0;
-		let N = this.#table.numRows;
-		let n = minlengthof(rows * 2); // number of currently-shown rows
 
-		/** @param {number} length */
-		function minlengthof(length) {
-			length = Math.floor(length);
-			if (N !== undefined) return Math.min(N, length);
-			if (length <= iterindex) return length;
-			while (length > iterindex) {
-				const { done, value } = iterator.next();
-				if (done) return N = iterindex;
-				index.push(iterindex++);
-				array.push(value);
-			}
-			return iterindex;
-		}
-
+		// @deno-fmt-ignore
 		root.appendChild(
-			html.fragment`<table style=${{
-				tableLayout,
-			}}>${thead}${tbody}</table>`,
+			html.fragment`<table style=${{ tableLayout }}>${thead}${tbody}</table>`
 		);
 
+		this.#resetTable = async () => {
+			batchIterator = this.#fetchTable();
+			batchResult = await batchIterator.next();
+			iterator = batchResult.value[Symbol.iterator]();
+			tbody.innerHTML = "";
+			iterindex = 0;
+			root.scrollTop = 0;
+			appendRows(rows * 2);
+		};
+
 		/**
-		 * @param {number} i
-		 * @param {number} j
+		 * Number of rows to append
+		 * @param {number} nrows
 		 */
-		function appendRows(i, j) {
-			if (iterindex === i) {
-				for (; i < j; ++i) {
-					appendRow(iterator.next().value, i);
+		async function appendRows(nrows) {
+			while (nrows >= 0) {
+				let result = iterator.next();
+				if (batchResult.done && result.done) {
+					// we've exhausted all rows
+					break;
 				}
-				iterindex = j;
-			} else {
-				for (let k; i < j; ++i) {
-					k = index[i];
-					appendRow(table.get(k), k);
+				if (result.done) {
+					// get the next batch
+					batchResult = await batchIterator.next();
+					// reset the iterator
+					iterator = batchResult.value[Symbol.iterator]();
+					continue;
 				}
+				// append the row and increment the index
+				appendRow(result.value, iterindex);
+				iterindex++;
+				nrows--;
 			}
 		}
 
 		/**
-		 * @param {arrow.StructRowProxy | null} d
+		 * @param {arrow.StructRowProxy} d
 		 * @param {number} i
 		 */
 		function appendRow(d, i) {
 			const itr = tr.cloneNode(true);
-			if (d != null) {
-				let td = itr.childNodes[0];
-				td.appendChild(document.createTextNode(String(i)));
-				for (let j = 0; j < cols.length; ++j) {
-					td = itr.childNodes[j + 1];
-					td.classList.remove("gray");
-					let col = cols[j];
-					/** @type {string} */
-					let stringified = format[col](d[col]);
-					if (shouldGrayoutValue(stringified)) {
-						td.classList.add("gray");
-					}
-					let value = document.createTextNode(stringified);
-					td.appendChild(value);
+			let td = itr.childNodes[0];
+			td.appendChild(document.createTextNode(String(i)));
+			for (let j = 0; j < cols.length; ++j) {
+				td = itr.childNodes[j + 1];
+				td.classList.remove("gray");
+				let col = cols[j];
+				/** @type {string} */
+				let stringified = format[col](d[col]);
+				if (shouldGrayoutValue(stringified)) {
+					td.classList.add("gray");
 				}
+				let value = document.createTextNode(stringified);
+				td.appendChild(value);
 			}
 			tbody.append(itr);
 		}
 
 		// scroll behavior
 		{
-			root.addEventListener("scroll", (event) => {
-				event.stopPropagation();
-				if (
-					root.scrollHeight - root.scrollTop <
-						rows * rowHeight * 1.5 &&
-					n < minlengthof(n + 1)
-				) {
-					appendRows(n, n = minlengthof(n + rows));
+			root.addEventListener("scroll", async () => {
+				let isAtBottom =
+					root.scrollHeight - root.scrollTop < rows * rowHeight * 1.5;
+				if (isAtBottom) {
+					await appendRows(rows);
 				}
 			});
 		}
@@ -207,7 +457,7 @@ class ArrowDataTable extends _HTMLElement {
 			});
 		}
 
-		appendRows(0, n = minlengthof(rows * 2));
+		appendRows(rows * 2);
 		this.shadowRoot?.appendChild(root);
 	}
 }
@@ -321,7 +571,7 @@ th {
   background: var(--white);
   border-bottom: solid 1px var(--light-silver);
   border-left: solid 1px var(--light-silver);
-  padding: 5px 7px;
+  padding: 5px 6px;
 }
 
 .number, .date {
@@ -361,6 +611,23 @@ td:nth-last-child(2), th:nth-last-child(2) {
 tr:first-child td {
 	border-top: solid 1px transparent;
 }
+
+.resize-handle {
+	width: 5px;
+	height: 100%;
+	background-color: transparent;
+	position: absolute;
+	right: -2.5px;
+	top: 0;
+	cursor: ew-resize;
+	z-index: 1;
+}
+
+.sort-button {
+	cursor: pointer;
+	background-color: var(--white);
+	user-select: none;
+}
 `;
 
 /**
@@ -373,35 +640,34 @@ function assert(condition, message) {
 }
 
 /**
- * @param {arrow.Table} data
- * @returns {HTMLElement}
+ * @param {RunQuery} runQuery
+ * @param {{ height?: number }} options
+ * @returns {Promise<ArrowDataTable>}
  */
-function createArrowDataTable(data) {
-	let table = new ArrowDataTable(data);
-	table.connectedCallback();
-	return table.node();
+async function createArrowDataTable(runQuery, options = {}) {
+	let table = new ArrowDataTable(runQuery, options);
+	await table.render();
+	return table;
 }
 
-/**
- * @param {import("npm:apache-arrow").Table} table
- */
-function formatof(table) {
+/** @param {arrow.Schema} schema */
+function formatof(schema) {
 	/** @type {Record<string, (value: any) => string>} */
 	const format = Object.create(null);
-	for (const field of table.schema.fields) {
+	for (const field of schema.fields) {
 		format[field.name] = formatterForDataTypeValue(field.type);
 	}
 	return format;
 }
 
 /**
- * @param {import("npm:apache-arrow").Table} table
+ * @param {arrow.Schema} schema
  * @returns {Record<string, "number" | "date">}
  */
-function classof(table) {
+function classof(schema) {
 	/** @type {Record<string, "number" | "date">} */
 	const classes = Object.create(null);
-	for (const field of table.schema.fields) {
+	for (const field of schema.fields) {
 		if (
 			arrow.DataType.isInt(field.type) ||
 			arrow.DataType.isFloat(field.type)
@@ -653,10 +919,4 @@ function shouldGrayoutValue(value) {
 		value === "NaN" ||
 		value === "TODO"
 	);
-}
-
-/**
- * @param {Uint8Array} bytes
- */
-function bytesToHex(bytes, limit = 32) {
 }

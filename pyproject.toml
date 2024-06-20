@@ -8,6 +8,7 @@ version = "0.0.0"
 dependencies = [
     "anywidget",
     "pyarrow>=16.1.0",
+    "duckdb>=1.0.0",
 ]
 readme = "README.md"
 
@@ -18,3 +19,24 @@ dev-dependencies = [
     "watchfiles>=0.22.0",
     "vega-datasets>=0.9.0",
 ]
+
+[tool.ruff.lint]
+pydocstyle = { convention = "numpy" }
+select = [
+        "E",    # style errors
+        "W",    # style warnings
+        "F",    # flakes
+        "D",    # pydocstyle
+        "D417", # Missing argument descriptions in Docstrings
+        "I",    # isort
+        "UP",   # pyupgrade
+        "C4",   # flake8-comprehensions
+        "B",    # flake8-bugbear
+        "A001", # flake8-builtins
+        "RUF",  # ruff-specific rules
+        "TCH",  # flake8-type-checking
+        "TID",  # flake8-tidy-imports
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["D", "S"]
