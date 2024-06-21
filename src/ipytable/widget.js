@@ -9,9 +9,8 @@ import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
 
 /** @typedef {{ schema: arrow.Schema } & AsyncIterator<arrow.Table, arrow.Table>} RecordBatchReader */
 /** @typedef {(sql: string) => Promise<RecordBatchReader>} FetchRecordBatchReader */
-/** @typedef {{ orderby: Array<{ field: string; order: "asc" | "desc" }>; }} QueryState */
 
-/** @typedef {{}} Model */
+/** @typedef {{ _table_name: string }} Model */
 
 export default () => {
 	/** @type {FetchRecordBatchReader} */
@@ -43,9 +42,10 @@ export default () => {
 			createRecordBatchReader = createRecordBatchReaderJupyter;
 		},
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
-		async render({ el }) {
+		async render({ model, el }) {
 			let dataTableElement = await createArrowDataTable(
 				createRecordBatchReader,
+				{ tableName: model.get("_table_name") },
 			);
 			el.appendChild(dataTableElement.node());
 		},
@@ -233,37 +233,38 @@ class _HTMLElement {
 
 class ArrowDataTable extends _HTMLElement {
 	/** @type {FetchRecordBatchReader} */
-	#runQuery;
-	/** @type {QueryState} */
-	#queryState;
+	#execute;
+
+	/** @type {Array<{ field: string; order: "asc" | "desc" }>}*/
+	#orderby;
 
 	/** @type {() => Promise<void>} */
 	#resetTable = async () => {};
 
-	/** @type {{ height?: number }} */
+	/** @type {{ height?: number, tableName?: string }} */
 	#options;
 
 	/**
-	 * @param {FetchRecordBatchReader} runQuery
-	 * @param {{ height?: number }} options
+	 * @param {FetchRecordBatchReader} execute
+	 * @param {{ height?: number, tableName?: string }} options
 	 */
-	constructor(runQuery, options = {}) {
+	constructor(execute, options = {}) {
 		super();
-		this.#runQuery = runQuery;
-		this.#queryState = { orderby: [] };
+		this.#execute = execute;
+		this.#orderby = [];
 		this.#options = options;
 		this.shadowRoot.appendChild(html`<style>${STYLES}</style>`);
 	}
 
 	async #createRowReader() {
-		let sql = "SELECT * FROM df";
-		if (this.#queryState.orderby.length) {
-			sql += " ORDER BY " + this.#queryState.orderby
-				.map((o) => `${o.field} ${o.order} NULLS LAST`)
+		let sql = `SELECT * FROM ${this.#options.tableName ?? "df"}`;
+		if (this.#orderby.length) {
+			sql += " ORDER BY " + this.#orderby
+				.map((o) => `${o.field} ${o.order.toUpperCase()} NULLS LAST`)
 				.join(", ");
 		}
 		console.debug(sql);
-		let recordBatchReader = await this.#runQuery(sql);
+		let recordBatchReader = await this.#execute(sql);
 		return new TableRowReader(recordBatchReader);
 	}
 
@@ -301,11 +302,11 @@ class ArrowDataTable extends _HTMLElement {
 					/** @type {signals.Signal<"unset" | "asc" | "desc">} */
 					let toggle = signals.signal("unset");
 					signals.effect(() => {
-						let orderby = this.#queryState.orderby.filter((o) => o.field !== field.name);
+						let orderby = this.#orderby.filter((o) => o.field !== field.name);
 						if (toggle.value !== "unset") {
 							orderby.unshift({ field: field.name, order: toggle.value });
 						}
-						this.#queryState.orderby = orderby;
+						this.#orderby = orderby;
 						this.#resetTable();
 					});
 					return thcol(field, columnWidth, toggle);
@@ -606,7 +607,7 @@ function assert(condition, message) {
 
 /**
  * @param {FetchRecordBatchReader} runQuery
- * @param {{ height?: number }} options
+ * @param {{ height?: number, tableName?: string }} options
  * @returns {Promise<ArrowDataTable>}
  */
 async function createArrowDataTable(runQuery, options = {}) {

@@ -6,6 +6,7 @@ import typing
 import anywidget
 import anywidget.experimental
 import duckdb
+import traitlets
 
 DataFrameObject = typing.Any
 
@@ -55,26 +56,30 @@ def record_batch_to_ipc(record_batch: pa.lib.RecordBatch) -> memoryview:
     return table_to_ipc(table)
 
 
-ROWS_PER_BATCH = 1000
-
-
 class Widget(anywidget.AnyWidget):
     """An anywidget for displaying tabular data in a table."""
 
     _esm = pathlib.Path(__file__).parent / "widget.js"
+    _table_name = traitlets.Unicode("df").tag(sync=True)
 
-    def __init__(self, df):
-        super().__init__(_query={"orderby": []})
-        conn = duckdb.connect(":memory:")
-        conn.register("df", arrow_table_from_dataframe_protocol(df))
+    def __init__(self, df=None, *, conn=None, table_name: None | str = None):
+        if conn is None:
+            conn = duckdb.connect(":memory:")
+            if df is None:
+                assert table_name is not None, "Must provide a table name if no df"
+            else:
+                table_name = "df"
+                conn.register("df", arrow_table_from_dataframe_protocol(df))
         self._conn = conn
         self._reader = None
+        self._rows_per_batch = 256
+        super().__init__(_table_name=table_name)
 
     @anywidget.experimental.command
     def _execute(self, msg: dict, buffers: list[bytes]):
         print(msg["sql"])
         result = self._conn.execute(msg["sql"])
-        self._reader = result.fetch_record_batch(ROWS_PER_BATCH)
+        self._reader = result.fetch_record_batch(self._rows_per_batch)
         try:
             record_batch = self._reader.read_next_batch()
             ipc = record_batch_to_ipc(record_batch)
@@ -86,6 +91,7 @@ class Widget(anywidget.AnyWidget):
 
     @anywidget.experimental.command
     def _next_batch(self, msg: dict, buffers: list[bytes]):
+        print("next batch")
         if self._reader is None:
             return True, []
         try:
