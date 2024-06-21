@@ -138,6 +138,8 @@ matplotlib-inline==0.1.7
     # via ipython
 mistune==3.0.2
     # via nbconvert
+msgspec==0.18.6
+    # via ipytable
 nbclient==0.10.0
     # via nbconvert
 nbconvert==7.16.4
