@@ -7,11 +7,10 @@ import anywidget
 import anywidget.experimental
 import duckdb
 
+DataFrameObject = typing.Any
+
 if typing.TYPE_CHECKING:
     import pyarrow as pa
-
-
-DataFrameObject = typing.Any
 
 
 # Copied from Altair
@@ -38,7 +37,7 @@ def arrow_table_from_dataframe_protocol(dflike: DataFrameObject) -> pa.lib.Table
     return pi.from_dataframe(dflike)  # type: ignore[no-any-return]
 
 
-def arrow_to_ipc(table: pa.lib.Table) -> memoryview:
+def table_to_ipc(table: pa.lib.Table) -> memoryview:
     """Convert a pyarrow Table to an Arrow IPC message."""
     import io
 
@@ -48,6 +47,17 @@ def arrow_to_ipc(table: pa.lib.Table) -> memoryview:
     feather.write_feather(table, sink, compression="uncompressed")
     return sink.getbuffer()
 
+
+def record_batch_to_ipc(record_batch: pa.lib.RecordBatch) -> memoryview:
+    import pyarrow as pa
+
+    table = pa.Table.from_batches([record_batch], schema=record_batch.schema)
+    return table_to_ipc(table)
+
+
+ROWS_PER_BATCH = 1000
+
+
 class Widget(anywidget.AnyWidget):
     """An anywidget for displaying tabular data in a table."""
 
@@ -55,13 +65,34 @@ class Widget(anywidget.AnyWidget):
 
     def __init__(self, df):
         super().__init__(_query={"orderby": []})
-        con = duckdb.connect(":memory:")
-        con.register("df", arrow_table_from_dataframe_protocol(df))
-        self._con = con
+        conn = duckdb.connect(":memory:")
+        conn.register("df", arrow_table_from_dataframe_protocol(df))
+        self._conn = conn
+        self._reader = None
 
     @anywidget.experimental.command
-    def _run_query(self, msg: dict, buffers: list[bytes]):
+    def _execute(self, msg: dict, buffers: list[bytes]):
         print(msg["sql"])
-        result = self._con.execute(msg["sql"])
-        ipc = arrow_to_ipc(result.arrow())
-        return None, [ipc.tobytes()]
+        result = self._conn.execute(msg["sql"])
+        self._reader = result.fetch_record_batch(ROWS_PER_BATCH)
+        try:
+            record_batch = self._reader.read_next_batch()
+            ipc = record_batch_to_ipc(record_batch)
+            return False, [ipc.tobytes()]
+        except StopIteration:
+            # No rows, but we need to return a schema
+            ipc = table_to_ipc(self._reader.schema.empty_table())
+            return True, [ipc.tobytes()]
+
+    @anywidget.experimental.command
+    def _next_batch(self, msg: dict, buffers: list[bytes]):
+        if self._reader is None:
+            return True, []
+        try:
+            record_batch = self._reader.read_next_batch()
+            ipc = record_batch_to_ipc(record_batch)
+            return False, [ipc.tobytes()]
+        except StopIteration:
+            ipc = table_to_ipc(self._reader.schema.empty_table())
+            self._reader = None
+            return True, [ipc.tobytes()]

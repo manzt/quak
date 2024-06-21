@@ -7,46 +7,46 @@ import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
 // @deno-types="npm:@preact/signals-core@1.6.1"
 import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
 
-/** @typedef {(query: Query) => AsyncIterator<arrow.Table, arrow.Table>} RunQuery */
+/** @typedef {{ schema: arrow.Schema } & AsyncIterator<arrow.Table, arrow.Table>} RecordBatchReader */
+/** @typedef {(sql: string) => Promise<RecordBatchReader>} FetchRecordBatchReader */
 /** @typedef {{ orderby: Array<{ field: string; order: "asc" | "desc" }>; }} QueryState */
 
 /** @typedef {{}} Model */
 
 export default () => {
-	/** @type {RunQuery} */
-	let runQuery;
+	/** @type {FetchRecordBatchReader} */
+	let createRecordBatchReader;
 	return {
 		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
 		initialize({ experimental: { invoke } }) {
 			/**
-			 * @param {Query} query
-			 * @param {number} [batchSize]
-			 * @returns {AsyncIterator<arrow.Table, arrow.Table>}
+			 * @param {string} sql
+			 * @returns {Promise<RecordBatchReader>}
 			 */
-			function runQueryJupyter(query, batchSize = 256) {
-				let offset = 0;
+			async function createRecordBatchReaderJupyter(sql) {
+				let [done, [ipc]] = await invoke("_execute", { sql });
+				let first = true;
+				let table = arrow.tableFromIPC(ipc);
 				return {
+					schema: table.schema,
 					async next() {
-						let [_, buffers] = await invoke("_run_query", {
-							sql: query
-								.limit(batchSize)
-								.offset(offset)
-								.toString(),
-						});
-						let table = arrow.tableFromIPC(buffers[0]);
-						offset += batchSize;
-						return {
-							value: table,
-							done: table.numRows < batchSize,
-						};
+						if (first) {
+							first = false;
+							return { done, value: table };
+						}
+						[done, [ipc]] = await invoke("_next_batch", {});
+						table = arrow.tableFromIPC(ipc);
+						return { done, value: table };
 					},
 				};
 			}
-			runQuery = runQueryJupyter;
+			createRecordBatchReader = createRecordBatchReaderJupyter;
 		},
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
 		async render({ el }) {
-			let dataTableElement = await createArrowDataTable(runQuery);
+			let dataTableElement = await createArrowDataTable(
+				createRecordBatchReader,
+			);
 			el.appendChild(dataTableElement.node());
 		},
 	};
@@ -58,74 +58,50 @@ const TRUNCATE = /** @type {const} */ ({
 	textOverflow: "ellipsis",
 });
 
-/** Bare-bones SQL query builder. */
-class Query {
-	constructor() {
-		/** @type {{
-		 *   select: Array<string>;
-		 *   from: string;
-		 *   orderby: Array<{ field: string; order: "asc" | "desc" }>;
-		 *   limit: undefined | number;
-		 *   offset: undefined | number;
-		}} */
-		this.parts = {
-			select: [],
-			from: "",
-			orderby: [],
-			limit: undefined,
-			offset: undefined,
-		};
+class TableRowReader {
+	/** @param {RecordBatchReader} reader */
+	constructor(reader) {
+		this.inner = reader;
+		/** @type {boolean} */
+		this.done = false;
+		/** @type {IterableIterator<arrow.StructRowProxy> | undefined} */
+		this.iter = undefined;
 	}
 
-	/** @param {string[]} fields */
-	select(...fields) {
-		this.parts.select = fields;
-		return this;
+	get schema() {
+		return this.inner.schema;
 	}
 
-	/** @param {string} table */
-	from(table) {
-		this.parts.from = table;
-		return this;
+	async #readNextBatch() {
+		const { value, done } = await this.inner.next();
+		this.done = done ?? false;
+		this.iter = value[Symbol.iterator]();
 	}
 
-	/** @param {Array<{ field: string; order: "asc" | "desc" }>} exprs */
-	orderby(...exprs) {
-		for (let expr of exprs) this.parts.orderby.push(expr);
-		return this;
-	}
-
-	/** @param {number} count */
-	limit(count) {
-		this.parts.limit = count;
-		return this;
-	}
-
-	/** @param {number} count */
-	offset(count) {
-		this.parts.offset = count;
-		return this;
-	}
-
-	/** @returns {string} */
-	toString() {
-		let query = `SELECT ${
-			this.parts.select.join(", ")
-		} FROM ${this.parts.from}`;
-		if (this.parts.orderby.length) {
-			query += ` ORDER BY ${
-				// @deno-fmt-ignore
-				this.parts.orderby
-					.map((o) => `${o.field} ${o.order.toUpperCase()} NULLS LAST`)
-					.join(", ")}`;
+	/** @return {IteratorResult<{ kind: "batch"; readNextBatch: () => Promise<void> } | { kind: "row"; data: arrow.StructRowProxy }>} */
+	next() {
+		if (!this.iter) {
+			return {
+				value: {
+					kind: "batch",
+					readNextBatch: this.#readNextBatch.bind(this),
+				},
+			};
 		}
-		if (this.parts.limit) {
-			query += ` LIMIT ${this.parts.limit}`;
+		let result = this.iter.next();
+		if (!result.done) {
+			return {
+				value: {
+					kind: "row",
+					data: result.value,
+				},
+			};
 		}
-		if (this.parts.offset) {
-			query += ` OFFSET ${this.parts.offset}`;
+		if (this.done) {
+			return { done: true, value: undefined };
 		}
-		return query;
+		this.iter = undefined;
+		return this.next();
 	}
 }
 
@@ -256,7 +232,7 @@ class _HTMLElement {
 }
 
 class ArrowDataTable extends _HTMLElement {
-	/** @type {RunQuery} */
+	/** @type {FetchRecordBatchReader} */
 	#runQuery;
 	/** @type {QueryState} */
 	#queryState;
@@ -268,7 +244,7 @@ class ArrowDataTable extends _HTMLElement {
 	#options;
 
 	/**
-	 * @param {RunQuery} runQuery
+	 * @param {FetchRecordBatchReader} runQuery
 	 * @param {{ height?: number }} options
 	 */
 	constructor(runQuery, options = {}) {
@@ -279,13 +255,16 @@ class ArrowDataTable extends _HTMLElement {
 		this.shadowRoot.appendChild(html`<style>${STYLES}</style>`);
 	}
 
-	#fetchTable() {
-		let query = new Query()
-			.select("*")
-			.from("df")
-			.orderby(...this.#queryState.orderby);
-		console.debug(query.toString());
-		return this.#runQuery(query);
+	async #createRowReader() {
+		let sql = "SELECT * FROM df";
+		if (this.#queryState.orderby.length) {
+			sql += " ORDER BY " + this.#queryState.orderby
+				.map((o) => `${o.field} ${o.order} NULLS LAST`)
+				.join(", ");
+		}
+		console.debug(sql);
+		let recordBatchReader = await this.#runQuery(sql);
+		return new TableRowReader(recordBatchReader);
 	}
 
 	async render() {
@@ -305,20 +284,20 @@ class ArrowDataTable extends _HTMLElement {
 		/** @type {HTMLDivElement} */
 		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
 
-		let batchIterator = this.#fetchTable();
-		let batchResult = await batchIterator.next();
-
-		let schema = batchResult.value.schema;
-		let cols = schema.fields.map((field) => field.name);
-		let format = formatof(schema);
-		let classes = classof(schema);
+		/** @type {number} */
+		let iterindex = 0;
+		/** @type {TableRowReader} */
+		let reader = await this.#createRowReader();
+		let cols = reader.schema.fields.map((field) => field.name);
+		let format = formatof(reader.schema);
+		let classes = classof(reader.schema);
 
 		let tbody = html`<tbody>`;
 		// @deno-fmt-ignore
 		let thead = html`<thead>
 			<tr style=${{ height: headerHeight }}>
 				<th></th>
-				${schema.fields.map((field) => {
+				${reader.schema.fields.map((field) => {
 					/** @type {signals.Signal<"unset" | "asc" | "desc">} */
 					let toggle = signals.signal("unset");
 					signals.effect(() => {
@@ -349,22 +328,15 @@ class ArrowDataTable extends _HTMLElement {
 		}}></td>
 		</tr>`;
 
-		/** @type {IterableIterator<arrow.StructRowProxy>} */
-		let iterator = batchResult.value[Symbol.iterator]();
-		/** @type {number} */
-		let iterindex = 0;
-
 		// @deno-fmt-ignore
 		root.appendChild(
 			html.fragment`<table style=${{ tableLayout }}>${thead}${tbody}</table>`
 		);
 
 		this.#resetTable = async () => {
-			batchIterator = this.#fetchTable();
-			batchResult = await batchIterator.next();
-			iterator = batchResult.value[Symbol.iterator]();
-			tbody.innerHTML = "";
+			reader = await this.#createRowReader();
 			iterindex = 0;
+			tbody.innerHTML = "";
 			root.scrollTop = 0;
 			appendRows(rows * 2);
 		};
@@ -375,22 +347,20 @@ class ArrowDataTable extends _HTMLElement {
 		 */
 		async function appendRows(nrows) {
 			while (nrows >= 0) {
-				let result = iterator.next();
-				if (batchResult.done && result.done) {
+				let result = reader.next();
+				if (result.done) {
 					// we've exhausted all rows
 					break;
 				}
-				if (result.done) {
-					// get the next batch
-					batchResult = await batchIterator.next();
-					// reset the iterator
-					iterator = batchResult.value[Symbol.iterator]();
+				if (result.value.kind === "row") {
+					appendRow(result.value.data, iterindex++);
+					nrows--;
 					continue;
 				}
-				// append the row and increment the index
-				appendRow(result.value, iterindex);
-				iterindex++;
-				nrows--;
+				if (result.value.kind === "batch") {
+					await result.value.readNextBatch();
+					continue;
+				}
 			}
 		}
 
@@ -635,7 +605,7 @@ function assert(condition, message) {
 }
 
 /**
- * @param {RunQuery} runQuery
+ * @param {FetchRecordBatchReader} runQuery
  * @param {{ height?: number }} options
  * @returns {Promise<ArrowDataTable>}
  */
