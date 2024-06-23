@@ -1690,10 +1690,8 @@ function hist(data, options = {}) {
 	// Apply styles for all axis ticks
 	svg.selectAll(".tick")
 		.attr("font-family", "var(--sans-serif)")
-		.attr("font-weight", "normal");
-
-	// just give me this code
-	// if it's the last tick align text to the right
+		.attr("font-weight", "normal")
+		.attr("style", "user-select: none;");
 
 	let node = svg.node();
 	assert(node, "Expected SVGElement");
