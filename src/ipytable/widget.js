@@ -6,18 +6,235 @@ import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
 // @deno-types="npm:@preact/signals-core@1.6.1"
 import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
+// @deno-types="npm:@types/d3@7"
+import * as d3 from "https://esm.sh/d3@7.8.5";
+
+import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.9.0/+esm";
+import * as sql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+esm";
 
 /** @typedef {{ schema: arrow.Schema } & AsyncIterator<arrow.Table, arrow.Table>} RecordBatchReader */
 /** @typedef {(sql: string) => Promise<RecordBatchReader>} FetchRecordBatchReader */
 
-/** @typedef {{ _table_name: string }} Model */
+/** @typedef {{ _table_name: string, _columns: Array<string> }} Model */
+
+/**
+ * @typedef Field
+ * @property {string} column
+ * @property {string} label
+ * @property {string[]} columns
+ * @property {string} basis
+ * @property {{ column: string, stats: string[] }} stats
+ * @property {() => string} toString
+ * @property {boolean} [aggregate]
+ */
+
+/**
+ * @typedef Channel
+ * @property {string} as
+ * @property {Field} field
+ * @property {string} channel
+ * @property {number} [value] // orderby
+ */
+
+class TableSummary extends mc.MosaicClient {
+	constructor(source, filterBy) {
+		super(filterBy);
+		this.source = source;
+		let { promise, resolve } = Promise.withResolvers();
+		this._infoPromise = promise;
+		this._infoResolve = resolve;
+	}
+
+	ready() {
+		return this._infoPromise;
+	}
+
+	get table() {
+		return this.source.table;
+	}
+
+	get columns() {
+		return this.source.columns;
+	}
+
+	get info() {
+		assert(this._fieldInfo, "Field info not requested");
+		return this._fieldInfo;
+	}
+
+	fields() {
+		return this.columns.map((column) => ({
+			table: this.table,
+			column,
+			stats: [],
+		}));
+	}
+
+	fieldInfo(info) {
+		this._infoResolve(this._fieldInfo = info);
+		return this;
+	}
+}
+
+/** @implements {Mark} */
+class Histogram extends mc.MosaicClient {
+	type = "rectY";
+
+	/** @type {{ table: string, column: string }} */
+	#source;
+
+	/** @type {Array<Channel>} */
+	#channels = [];
+
+	/** @type {any} */
+	_info = undefined;
+
+	/**
+	 * @param {{ table: string, column: string }} source
+	 * @param {{ filterBy?: string }} options
+	 */
+	constructor(source, options = {}) {
+		super(options.filterBy);
+		this.el = document.createElement("div");
+		this.#source = source;
+		/**
+		 * @param {string} channel
+		 * @param {any} entry
+		 */
+		let process = (channel, entry) => {
+			if (isTransform(entry)) {
+				const enc = entry(this, channel);
+				for (const key in enc) {
+					process(key, enc[key]);
+				}
+			} else if (isFieldObject(channel, entry)) {
+				this.#channels.push(fieldEntry(channel, entry));
+			} else {
+				throw new Error(`Invalid encoding for channel ${channel}`);
+			}
+		};
+		let encodings = {
+			x: bin(source.column),
+			y: sql.count(),
+		};
+		for (let [channel, entry] of Object.entries(encodings)) {
+			process(channel, entry);
+		}
+	}
+
+	fields() {
+		const fields = new Map();
+		for (let { field } of this.#channels) {
+			if (!field) continue;
+			let stats = field.stats?.stats || [];
+			let key = field.stats?.column ?? field;
+			let entry = fields.get(key);
+			if (!entry) {
+				entry = new Set();
+				fields.set(key, entry);
+			}
+			stats.forEach((s) => entry.add(s));
+		}
+		return Array.from(
+			fields,
+			([c, s]) => ({ table: this.#source.table, column: c, stats: s }),
+		);
+	}
+
+	fieldInfo(info) {
+		let lookup = Object.fromEntries(info.map((x) => [x.column, x]));
+		for (let entry of this.#channels) {
+			let { field } = entry;
+			if (field) {
+				Object.assign(entry, lookup[field.stats?.column ?? field]);
+			}
+		}
+		this._fieldInfo = true;
+		return this;
+	}
+
+	/** @param {string} channel */
+	channel(channel) {
+		return this.#channels.find((c) => c.channel === channel);
+	}
+
+	/**
+	 * @param {string} channel
+	 * @param {{ exact?: boolean }} [options]
+	 * @returns {Channel}
+	 */
+	channelField(channel, { exact = false } = {}) {
+		const c = exact
+			? this.channel(channel)
+			: this.#channels.find((c) => c.channel.startsWith(channel));
+		assert(c, `Channel ${channel} not found`);
+		return c;
+	}
+
+	hasFieldInfo() {
+		return !!this._fieldInfo;
+	}
+
+	/**
+	 * Return a query specifying the data needed by this Mark client.
+	 * @param {*} [filter] The filtering criteria to apply in the query.
+	 * @returns {*} The client query
+	 */
+	query(filter = []) {
+		return markQuery(this.#channels, this.#source.table).where(filter);
+	}
+
+	/**
+	 * Provide query result data to the mark.
+	 */
+	queryResult(data) {
+		let bins = Array.from(data, (d) => ({
+			x0: d.x1,
+			x1: d.x2,
+			length: d.y,
+		}));
+		bins = bins.filter((b) => b.x0 != null);
+		bins.sort((a, b) => a.x0 - b.x0);
+		console.log(bins);
+		this.el.appendChild(hist({ bins }));
+		return this;
+	}
+
+	get plot() {
+		return {
+			el: this.el,
+			getAttribute: (name) => {
+				return undefined;
+			},
+		};
+	}
+}
 
 export default () => {
 	/** @type {FetchRecordBatchReader} */
 	let createRecordBatchReader;
+	let coordinator = new mc.Coordinator();
+	/** @type {TableSummary} */
+	let summary;
 	return {
 		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
-		initialize({ experimental: { invoke } }) {
+		async initialize({ model, experimental: { invoke } }) {
+			let connector = {
+				/** @param {string | { type: "arrow", sql: string }} arg */
+				async query(arg) {
+					let sql = typeof arg === "string" ? arg : arg.sql;
+					assert(typeof sql === "string", "Expected a string");
+					let [_, buffers] = await invoke("_query", { sql });
+					let table = arrow.tableFromIPC(buffers[0]);
+					return table;
+				},
+			};
+			coordinator.databaseConnector(connector);
+			summary = new TableSummary({
+				table: model.get("_table_name"),
+				columns: model.get("_columns"),
+			});
+			coordinator.connect(summary);
 			/**
 			 * @param {string} sql
 			 * @returns {Promise<RecordBatchReader>}
@@ -47,6 +264,25 @@ export default () => {
 				createRecordBatchReader,
 				{ tableName: model.get("_table_name") },
 			);
+			await summary.ready();
+			let columns = summary
+				.info
+				.filter((entry) => entry.type === "number")
+				.map(({ column }) => {
+					return {
+						name: column,
+						hist: new Histogram({ table: summary.table, column }),
+					};
+				});
+
+			for (let column of columns) {
+				coordinator.connect(column.hist);
+			}
+
+			let div = html`<div style=${{ display: "flex" }}>${
+				columns.map((c) => c.hist.el)
+			}</div>`;
+			el.appendChild(div);
 			el.appendChild(dataTableElement.node());
 		},
 	};
@@ -885,4 +1121,420 @@ function shouldGrayoutValue(value) {
 		value === "NaN" ||
 		value === "TODO"
 	);
+}
+
+/// bin stuff
+
+const Transform = Symbol();
+
+/** @typedef {"linear" | "log" | "pow" | "symlog" | "time"} ScaleType */
+
+/**
+ * @typedef Mark
+ * @property {string} type
+ * @property {{getAttribute: (name: string) => any}} plot
+ * @property {(channel: string) => { type: string, min: number, max: number }} channelField
+ */
+
+/**
+ * @param {Mark} mark
+ * @param {string} channel
+ */
+function channelScale(mark, channel) {
+	const { plot } = mark;
+
+	let scaleType = plot.getAttribute(`${channel}Scale`);
+	if (!scaleType) {
+		const { type } = mark.channelField(channel);
+		scaleType = type === "date" ? "time" : "linear";
+	}
+
+	/** @type {{ type: ScaleType, base?: number, exponent?: number, constant?: number }} */
+	const options = { type: scaleType };
+	switch (scaleType) {
+		case "log":
+			options.base = plot.getAttribute(`${channel}Base`) ?? 10;
+			break;
+		case "pow":
+			options.exponent = plot.getAttribute(`${channel}Exponent`) ?? 1;
+			break;
+		case "symlog":
+			options.constant = plot.getAttribute(`${channel}Constant`) ?? 1;
+			break;
+	}
+	return sql.scaleTransform(options);
+}
+
+// @deno-fmt-ignore
+const EXTENT = new Set([ "rectY-x", "rectX-y", "rect-x", "rect-y", "ruleY-x", "ruleX-y" ]);
+
+/**
+ * @param {Mark} mark
+ * @param {string} channel
+ */
+function hasExtent(mark, channel) {
+	return EXTENT.has(`${mark.type}-${channel}`);
+}
+
+/**
+ * @param {string} field
+ * @param {{}} [options]
+ * @returns {(mark: Mark, channel: string) => Record<string, Field>}
+ */
+function bin(field, options = {}) {
+	/**
+	 * @param {Mark} mark
+	 * @param {string} channel
+	 */
+	const fn = (mark, channel) => {
+		if (hasExtent(mark, channel)) {
+			// @deno-fmt-ignore
+			return {
+				[`${channel}1`]: binField(mark, channel, field, options),
+				[`${channel}2`]: binField(mark, channel, field, { ...options, offset: 1 }),
+			};
+		}
+		return {
+			[channel]: binField(mark, channel, field, options),
+		};
+	};
+	fn[Transform] = true;
+	return fn;
+}
+
+const YEAR = "year";
+const MONTH = "month";
+const DAY = "day";
+const HOUR = "hour";
+const MINUTE = "minute";
+const SECOND = "second";
+const MILLISECOND = "millisecond";
+
+const durationSecond = 1000;
+const durationMinute = durationSecond * 60;
+const durationHour = durationMinute * 60;
+const durationDay = durationHour * 24;
+const durationWeek = durationDay * 7;
+const durationMonth = durationDay * 30;
+const durationYear = durationDay * 365;
+
+const intervals = /** @type {const} */ ([
+	[SECOND, 1, durationSecond],
+	[SECOND, 5, 5 * durationSecond],
+	[SECOND, 15, 15 * durationSecond],
+	[SECOND, 30, 30 * durationSecond],
+	[MINUTE, 1, durationMinute],
+	[MINUTE, 5, 5 * durationMinute],
+	[MINUTE, 15, 15 * durationMinute],
+	[MINUTE, 30, 30 * durationMinute],
+	[HOUR, 1, durationHour],
+	[HOUR, 3, 3 * durationHour],
+	[HOUR, 6, 6 * durationHour],
+	[HOUR, 12, 12 * durationHour],
+	[DAY, 1, durationDay],
+	[DAY, 7, durationWeek],
+	[MONTH, 1, durationMonth],
+	[MONTH, 3, 3 * durationMonth],
+	[YEAR, 1, durationYear],
+]);
+
+/**
+ * @param {number} min
+ * @param {number} max
+ * @param {number} steps
+ */
+function timeInterval(min, max, steps) {
+	const span = max - min;
+	const target = span / steps;
+
+	let i = 0;
+	while (i < intervals.length && intervals[i][2] < target) {
+		i++;
+	}
+
+	if (i === intervals.length) {
+		return { interval: YEAR, step: binStep(span, steps) };
+	}
+
+	if (i > 0) {
+		let interval = intervals[
+			target / intervals[i - 1][2] < intervals[i][2] / target ? i - 1 : i
+		];
+		return { interval: interval[0], step: interval[1] };
+	}
+
+	return { interval: MILLISECOND, step: binStep(span, steps, 1) };
+}
+
+/**
+ * @param {Mark} mark
+ * @param {string} channel
+ * @param {string} column
+ * @param {{ interval?: "number" | "date", steps?: number, offset?: number, step?: number }} options
+ */
+function binField(mark, channel, column, options) {
+	return {
+		column,
+		label: column,
+		get columns() {
+			return [column];
+		},
+		get basis() {
+			return column;
+		},
+		get stats() {
+			return { column, stats: ["min", "max"] };
+		},
+		toString() {
+			const { type, min, max } = mark.channelField(channel);
+			assert(
+				type !== undefined && min !== undefined && max !== undefined,
+				"Expected channel to have type, min, and max",
+			);
+			const { interval: i, steps, offset = 0 } = options;
+			const interval = i ??
+				(type === "date" || hasTimeScale(mark, channel) ? "date" : "number");
+
+			if (interval === "number") {
+				// perform number binning
+				const { apply, sqlApply, sqlInvert } = channelScale(
+					mark,
+					channel,
+				);
+				const b = bins(apply(min), apply(max), options);
+				const col = sqlApply(column);
+				const base = b.min === 0 ? col : `(${col} - ${b.min})`;
+				assert(
+					typeof b.steps === "number",
+					"Expected steps to be a number",
+				);
+				const alpha = `${(b.max - b.min) / b.steps}::DOUBLE`;
+				const off = offset ? `${offset} + ` : "";
+				const expr = `${b.min} + ${alpha} * (${off}FLOOR(${base} / ${alpha}))`;
+				return `${sqlInvert(expr)}`;
+			} else {
+				// perform date/time binning
+				const { interval: unit, step = 1 } = interval === "date"
+					? timeInterval(min, max, steps || 40)
+					: options;
+				const off = offset ? ` + INTERVAL ${offset * step} ${unit}` : "";
+				assert(unit !== undefined, "Expected unit to be defined");
+				return `(${dateBin(column, unit, step)}${off})`;
+			}
+		},
+	};
+}
+
+/**
+ * @param {Mark} mark
+ * @param {string} channel
+ */
+function hasTimeScale(mark, channel) {
+	const scale = mark.plot.getAttribute(`${channel}Scale`);
+	return scale === "utc" || scale === "time";
+}
+
+/**
+ * @param {number} span
+ * @param {number} steps
+ * @param {number} [minstep]
+ * @param {number} [logb]
+ */
+function binStep(span, steps, minstep = 0, logb = Math.LN10) {
+	let v;
+
+	const level = Math.ceil(Math.log(steps) / logb);
+	let step = Math.max(
+		minstep,
+		Math.pow(10, Math.round(Math.log(span) / logb) - level),
+	);
+
+	// increase step size if too many bins
+	while (Math.ceil(span / step) > steps) step *= 10;
+
+	// decrease step size if allowed
+	const div = [5, 2];
+	for (let i = 0, n = div.length; i < n; ++i) {
+		v = step / div[i];
+		if (v >= minstep && span / v <= steps) step = v;
+	}
+
+	return step;
+}
+
+/**
+ * @param {number} min
+ * @param {number} max
+ * @param {{ steps?: number, minstep?: number, nice?: boolean, step?: number }} options
+ */
+function bins(min, max, options) {
+	let { step, steps, minstep = 0, nice = true } = options;
+
+	if (nice !== false) {
+		// use span to determine step size
+		const span = max - min;
+		const logb = Math.LN10;
+		step = step || binStep(span, steps || 25, minstep, logb);
+
+		// adjust min/max relative to step
+		let v = Math.log(step);
+		const precision = v >= 0 ? 0 : ~~(-v / logb) + 1;
+		const eps = Math.pow(10, -precision - 1);
+		v = Math.floor(min / step + eps) * step;
+		min = min < v ? v - step : v;
+		max = Math.ceil(max / step) * step;
+		steps = Math.round((max - min) / step);
+	}
+
+	return { min, max, steps };
+}
+
+/**
+ * @param {string} expr
+ * @param {string} interval
+ * @param {number} [steps]
+ */
+function dateBin(expr, interval, steps = 1) {
+	const i = `INTERVAL ${steps} ${interval}`;
+	const d = sql.asColumn(expr);
+	return sql.sql`TIME_BUCKET(${i}, ${d})`.annotate({ label: interval });
+}
+
+/**
+ * @param {string} channel
+ * @param {Field} field
+ */
+function fieldEntry(channel, field) {
+	return {
+		channel,
+		field,
+		as: field instanceof sql.Ref ? field.column : channel,
+	};
+}
+
+/**
+ * @param {string} channel
+ * @param {unknown} field
+ * @returns {field is Field}
+ */
+function isFieldObject(channel, field) {
+	if (channel === "sort" || channel === "tip") {
+		return false;
+	}
+	return (
+		typeof field === "object" &&
+		field != null &&
+		!Array.isArray(field)
+	);
+}
+
+/**
+ * @param {unknown} x
+ * @returns {x is (mark: Mark, channel: string) => Record<string, Field>}
+ */
+function isTransform(x) {
+	// @ts-expect-error - TS doesn't support symbol types
+	return typeof x === "function" && x[Transform] === true;
+}
+
+/**
+ * Default query construction for a mark.
+ *
+ * Tracks aggregates by checking fields for an aggregate flag.
+ * If aggregates are found, groups by all non-aggregate fields.
+ *
+ * @param {Array<Channel>} channels array of visual encoding channel specs.
+ * @param {string} table the table to query.
+ * @param {Array<string>} skip an optional array of channels to skip. Mark subclasses can skip channels that require special handling.
+ * @returns {sql.Query} a Query instance
+ */
+export function markQuery(channels, table, skip = []) {
+	const q = sql.Query.from({ source: table });
+	const dims = new Set();
+	let aggr = false;
+
+	for (const c of channels) {
+		const { channel, field, as } = c;
+		if (skip.includes(channel)) continue;
+
+		if (channel === "orderby") {
+			q.orderby(c.value);
+		} else if (field) {
+			if (field.aggregate) {
+				aggr = true;
+			} else {
+				if (dims.has(as)) continue;
+				dims.add(as);
+			}
+			q.select({ [as]: field });
+		}
+	}
+
+	if (aggr) {
+		q.groupby(Array.from(dims));
+	}
+
+	return q;
+}
+
+function hist({ bins }) {
+	const width = 125;
+	const height = 85;
+	const margin = { top: 20, right: 20, bottom: 20, left: 0 };
+
+	const x = d3
+		.scaleLinear()
+		.domain([bins.at(0).x0, bins.at(-1).x1])
+		.nice()
+		.range([margin.left, width - margin.right]);
+
+	const y = d3
+		.scaleLinear()
+		.domain([0, d3.max(bins, (d) => d.length)])
+		.range([height - margin.bottom, margin.top]);
+
+	const svg = d3
+		.create("svg")
+		.attr("width", width)
+		.attr("height", height)
+		.attr("viewBox", [0, 0, width, height])
+		.attr("style", "max-width: 100%; height: auto;");
+
+	svg
+		.append("g")
+		.attr("fill", "steelblue")
+		.selectAll()
+		.data(bins)
+		.join("rect")
+		.attr("x", (d) => x(d.x0) + 1)
+		.attr("width", (d) => x(d.x1) - x(d.x0) - 1)
+		.attr("y", (d) => y(d.length))
+		.attr("height", (d) => y(0) - y(d.length));
+
+	svg
+		.append("g")
+		.attr("class", "brush")
+		.call(
+			d3.brushX().extent([
+				[margin.left, margin.top],
+				[width - margin.right, height - margin.bottom],
+			]),
+		);
+	svg
+		.append("g")
+		.attr("class", "brush")
+		.call(d3.brushX().extent([height, margin.bottom]));
+
+	// Add the x-axis and label.
+	svg
+		.append("g")
+		.attr("transform", `translate(0,${height - margin.bottom})`)
+		.call(
+			d3
+				.axisBottom(x)
+				.ticks(width / 100)
+				.tickSizeOuter(0),
+		);
+
+	return svg.node();
 }

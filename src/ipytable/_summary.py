@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import typing
 
 import msgspec
@@ -20,9 +21,14 @@ class ValueCounts(msgspec.Struct):
     kind: str = "counts"
 
 
+class Bin(msgspec.Struct):
+    x0: float
+    x1: float
+    length: int
+
+
 class Histogram(msgspec.Struct):
-    hist: list[int]
-    bin_edges: list[float]
+    bins: list[Bin]
     null_count: int = 0
     kind: str = "hist"
 
@@ -41,6 +47,20 @@ def null_count(conn: duckdb.DuckDBPyConnection, table: str, field: pa.Field):
     row = conn.query(f"SELECT COUNT(*) FROM {table} WHERE {col} IS NULL").fetchone()
     assert row, "No rows returned from query"
     return row[0]
+
+
+T = typing.TypeVar("T")
+
+
+def window(seq: typing.Iterable[T], n: int = 2):
+    """Return a sliding window (of width n) over data from the iterable."""
+    it = iter(seq)
+    result = tuple(itertools.islice(it, n))
+    if len(result) == n:
+        yield result
+    for elem in it:
+        result = result[1:] + (elem,)
+        yield result
 
 
 def count_and_group_unique_values(
@@ -123,13 +143,17 @@ def histogram(
         bin_edges = bin_edges.astype(np.datetime64)
 
     return Histogram(
-        hist=hist.tolist(),
-        bin_edges=bin_edges.tolist(),
+        bins=[
+            Bin(x0=float(x0), x1=float(x1), length=int(count))
+            for count, (x0, x1) in zip(hist, window(bin_edges))
+        ],
         null_count=null_count(conn, table, field),
     )
 
 
-def summarize(conn: duckdb.DuckDBPyConnection, table: str, field: pa.Field) -> Summary:
+def summarize_field(
+    conn: duckdb.DuckDBPyConnection, table: str, field: pa.Field
+) -> Summary:
     if pa.types.is_integer(field.type) or pa.types.is_floating(field.type):
         return histogram(conn, table, field)
 
@@ -176,3 +200,23 @@ def summarize(conn: duckdb.DuckDBPyConnection, table: str, field: pa.Field) -> S
         )
 
     raise TypeError(f"Unsupported field type: {field.type}")
+
+
+def summarize_all(
+    conn: duckdb.DuckDBPyConnection, table: str, schema: pa.Schema
+) -> dict[str, Summary]:
+    data = {}
+    for field in schema:
+        try:
+            data[field.name] = summarize_field(conn, table, field)
+        except NotImplementedError:
+            data[field.name] = None
+    return data
+
+
+def summarize_all_json(
+    conn: duckdb.DuckDBPyConnection, table: str, schema: pa.Schema
+) -> str:
+    data = summarize_all(conn, table, schema)
+    encoded = msgspec.json.encode(data)
+    return encoded.decode("utf-8")

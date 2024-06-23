@@ -56,24 +56,39 @@ def record_batch_to_ipc(record_batch: pa.lib.RecordBatch) -> memoryview:
     return table_to_ipc(table)
 
 
+def get_columns(conn, table_name):
+    result = conn.execute(f"""
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = '{table_name}'
+    """)
+    rows = result.fetchall()
+    return [row[0] for row in rows]
+
+
 class Widget(anywidget.AnyWidget):
     """An anywidget for displaying tabular data in a table."""
 
     _esm = pathlib.Path(__file__).parent / "widget.js"
     _table_name = traitlets.Unicode("df").tag(sync=True)
+    _columns = traitlets.List(traitlets.Unicode()).tag(sync=True)
 
-    def __init__(self, df=None, *, conn=None, table_name: None | str = None):
-        if conn is None:
+    def __init__(self, conn, *, table_name: str = "df"):
+        if not isinstance(conn, duckdb.DuckDBPyConnection):
+            df = conn
             conn = duckdb.connect(":memory:")
-            if df is None:
-                assert table_name is not None, "Must provide a table name if no df"
-            else:
-                table_name = "df"
-                conn.register("df", arrow_table_from_dataframe_protocol(df))
+            conn.register(table_name, arrow_table_from_dataframe_protocol(df))
         self._conn = conn
         self._reader = None
         self._rows_per_batch = 256
-        super().__init__(_table_name=table_name)
+        super().__init__(_table_name=table_name, _columns=get_columns(conn, table_name))
+
+    @anywidget.experimental.command
+    def _query(self, msg: dict, buffers: list[bytes]):
+        print(msg["sql"])
+        result = self._conn.query(msg["sql"]).arrow()
+        ipc = table_to_ipc(result)
+        return True, [ipc.tobytes()]
 
     @anywidget.experimental.command
     def _execute(self, msg: dict, buffers: list[bytes]):
