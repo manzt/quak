@@ -6,9 +6,8 @@ import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
 // @deno-types="npm:@preact/signals-core@1.6.1"
 import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
-// @deno-types="npm:@types/d3@7"
-import * as d3 from "https://esm.sh/d3@7.8.5";
 
+// ugh no types for these
 import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.9.0/+esm";
 import * as sql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+esm";
 
@@ -29,24 +28,47 @@ import * as sql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+esm
  */
 
 /**
+ * @typedef Info
+ * @property {string} column
+ * @property {string} type
+ * @property {boolean} nullable
+ * @property {string} sqlType
+ * @property {string} table
+ * @property {number} [min]
+ * @property {number} [max]
+ * @property {number} [distinct]
+ */
+
+/**
  * @typedef Channel
  * @property {string} as
  * @property {Field} field
  * @property {string} channel
+ * @property {string} [type]
  * @property {number} [value] // orderby
  */
 
+/**
+ * @typedef ColumnSummaryVis
+ * @property {string} name
+ * @property {Histogram} client
+ */
+
 class TableSummary extends mc.MosaicClient {
-	constructor(source, filterBy) {
-		super(filterBy);
+	/** @type {Array<Info> | undefined} */
+	#info = undefined;
+
+	/**
+	 * @param {{ table: string, columns: Array<string> }} source
+	 */
+	constructor(source) {
+		super(undefined);
 		this.source = source;
-		let { promise, resolve } = Promise.withResolvers();
-		this._infoPromise = promise;
-		this._infoResolve = resolve;
+		this._deferred = defer();
 	}
 
 	ready() {
-		return this._infoPromise;
+		return this._deferred.promise;
 	}
 
 	get table() {
@@ -57,11 +79,14 @@ class TableSummary extends mc.MosaicClient {
 		return this.source.columns;
 	}
 
+	/** @type {Info[]} */
 	get info() {
-		assert(this._fieldInfo, "Field info not requested");
-		return this._fieldInfo;
+		assert(this.#info, "Field info not requested");
+		return this.#info;
 	}
 
+	/** @returns {Array<{ table: string, column: string, stats: Array<string> }>} */
+	// @ts-expect-error - _field type is bad from MosaicClient
 	fields() {
 		return this.columns.map((column) => ({
 			table: this.table,
@@ -70,8 +95,10 @@ class TableSummary extends mc.MosaicClient {
 		}));
 	}
 
+	/** @param {Array<Info>} info */
 	fieldInfo(info) {
-		this._infoResolve(this._fieldInfo = info);
+		this.#info = info;
+		this._deferred.resolve(info);
 		return this;
 	}
 }
@@ -82,6 +109,9 @@ class Histogram extends mc.MosaicClient {
 
 	/** @type {{ table: string, column: string }} */
 	#source;
+
+	/** @type {HTMLElement} */
+	#el = document.createElement("div");
 
 	/** @type {Array<Channel>} */
 	#channels = [];
@@ -95,7 +125,6 @@ class Histogram extends mc.MosaicClient {
 	 */
 	constructor(source, options = {}) {
 		super(options.filterBy);
-		this.el = document.createElement("div");
 		this.#source = source;
 		/**
 		 * @param {string} channel
@@ -122,6 +151,8 @@ class Histogram extends mc.MosaicClient {
 		}
 	}
 
+	/** @returns {Array<{ table: string, column: string, stats: Array<string> }>} */
+	// @ts-expect-error - _field type is bad from MosaicClient
 	fields() {
 		const fields = new Map();
 		for (let { field } of this.#channels) {
@@ -141,6 +172,7 @@ class Histogram extends mc.MosaicClient {
 		);
 	}
 
+	/** @param {Array<Info>} info */
 	fieldInfo(info) {
 		let lookup = Object.fromEntries(info.map((x) => [x.column, x]));
 		for (let entry of this.#channels) {
@@ -186,6 +218,7 @@ class Histogram extends mc.MosaicClient {
 
 	/**
 	 * Provide query result data to the mark.
+	 * @param {arrow.Table<{ x1: arrow.Int, x2: arrow.Int, y: arrow.Int }>} data
 	 */
 	queryResult(data) {
 		let bins = Array.from(data, (d) => ({
@@ -193,17 +226,23 @@ class Histogram extends mc.MosaicClient {
 			x1: d.x2,
 			length: d.y,
 		}));
-		bins = bins.filter((b) => b.x0 != null);
-		bins.sort((a, b) => a.x0 - b.x0);
-		console.log(bins);
-		this.el.appendChild(hist({ bins }));
+		// TODO: Handle nulls
+		let nullCount = 0;
+		let nullBinIndex = bins.findIndex((b) => b.x0 == null);
+		if (nullBinIndex >= 0) {
+			nullCount = bins[nullBinIndex].length;
+			bins.splice(nullBinIndex, 1);
+		}
+		let svg = hist(bins, { nullCount });
+		this.#el.appendChild(svg);
 		return this;
 	}
 
 	get plot() {
 		return {
-			el: this.el,
-			getAttribute: (name) => {
+			el: this.#el,
+			/** @param {string} _name */
+			getAttribute(_name) {
 				return undefined;
 			},
 		};
@@ -218,7 +257,7 @@ export default () => {
 	let summary;
 	return {
 		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
-		async initialize({ model, experimental: { invoke } }) {
+		initialize({ model, experimental: { invoke } }) {
 			let connector = {
 				/** @param {string | { type: "arrow", sql: string }} arg */
 				async query(arg) {
@@ -260,10 +299,6 @@ export default () => {
 		},
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
 		async render({ model, el }) {
-			let dataTableElement = await createArrowDataTable(
-				createRecordBatchReader,
-				{ tableName: model.get("_table_name") },
-			);
 			await summary.ready();
 			let columns = summary
 				.info
@@ -271,19 +306,19 @@ export default () => {
 				.map(({ column }) => {
 					return {
 						name: column,
-						hist: new Histogram({ table: summary.table, column }),
+						client: new Histogram({ table: summary.table, column }),
 					};
 				});
 
 			for (let column of columns) {
-				coordinator.connect(column.hist);
+				coordinator.connect(column.client);
 			}
 
-			let div = html`<div style=${{ display: "flex" }}>${
-				columns.map((c) => c.hist.el)
-			}</div>`;
-			el.appendChild(div);
-			el.appendChild(dataTableElement.node());
+			let table = new ArrowDataTable(createRecordBatchReader, columns, {
+				tableName: model.get("_table_name"),
+			});
+			await table.render();
+			el.appendChild(table.node());
 		},
 	};
 };
@@ -345,8 +380,9 @@ class TableRowReader {
  * @param {arrow.Field} field
  * @param {number} minWidth
  * @param {signals.Signal<"unset" | "asc" | "desc">} sortState
+ * @param {ColumnSummaryVis} [vis]
  */
-function thcol(field, minWidth, sortState) {
+function thcol(field, minWidth, sortState, vis) {
 	let buttonVisible = signals.signal(false);
 	let width = signals.signal(minWidth);
 
@@ -382,6 +418,7 @@ function thcol(field, minWidth, sortState) {
 		</div>
 		${verticalResizeHandle}
 		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
+		${vis?.client.plot.el}
 	</th>`;
 
 	signals.effect(() => {
@@ -480,15 +517,20 @@ class ArrowDataTable extends _HTMLElement {
 	/** @type {{ height?: number, tableName?: string }} */
 	#options;
 
+	/** @type {Array<ColumnSummaryVis>} */
+	#columns;
+
 	/**
 	 * @param {FetchRecordBatchReader} execute
+	 * @param {Array<ColumnSummaryVis>} columns
 	 * @param {{ height?: number, tableName?: string }} options
 	 */
-	constructor(execute, options = {}) {
+	constructor(execute, columns, options = {}) {
 		super();
 		this.#execute = execute;
 		this.#orderby = [];
 		this.#options = options;
+		this.#columns = columns;
 		this.shadowRoot.appendChild(html`<style>${STYLES}</style>`);
 	}
 
@@ -545,7 +587,8 @@ class ArrowDataTable extends _HTMLElement {
 						this.#orderby = orderby;
 						this.#resetTable();
 					});
-					return thcol(field, columnWidth, toggle);
+					let vis = this.#columns.find((c) => c.name === field.name);
+					return thcol(field, columnWidth, toggle, vis);
 				})}
 				<th style=${{
 			width: "99%",
@@ -773,7 +816,7 @@ th {
   background: var(--white);
   border-bottom: solid 1px var(--light-silver);
   border-left: solid 1px var(--light-silver);
-  padding: 5px 6px;
+  padding: 5px 6px 0 6px;
 }
 
 .number, .date {
@@ -839,17 +882,6 @@ tr:first-child td {
  */
 function assert(condition, message) {
 	if (!condition) throw new Error(message);
-}
-
-/**
- * @param {FetchRecordBatchReader} runQuery
- * @param {{ height?: number, tableName?: string }} options
- * @returns {Promise<ArrowDataTable>}
- */
-async function createArrowDataTable(runQuery, options = {}) {
-	let table = new ArrowDataTable(runQuery, options);
-	await table.render();
-	return table;
 }
 
 /** @param {arrow.Schema} schema */
@@ -1133,7 +1165,7 @@ const Transform = Symbol();
  * @typedef Mark
  * @property {string} type
  * @property {{getAttribute: (name: string) => any}} plot
- * @property {(channel: string) => { type: string, min: number, max: number }} channelField
+ * @property {(channel: string, opts?: { exact?: boolean }) => Channel} channelField
  */
 
 /**
@@ -1403,6 +1435,7 @@ function dateBin(expr, interval, steps = 1) {
 /**
  * @param {string} channel
  * @param {Field} field
+ * @returns {Channel}
  */
 function fieldEntry(channel, field) {
 	return {
@@ -1435,6 +1468,22 @@ function isFieldObject(channel, field) {
 function isTransform(x) {
 	// @ts-expect-error - TS doesn't support symbol types
 	return typeof x === "function" && x[Transform] === true;
+}
+
+/**
+ * TODO: Replace with Promise.withResolvers() when available
+ *
+ * @template T
+ * @returns {{ promise: Promise<T>, resolve: (value: T) => void, reject: (reason: any) => void }}
+ */
+function defer() {
+	let resolve, reject;
+	let promise = new Promise((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	// @ts-expect-error - resolve and reject are assigned
+	return { resolve, reject, promise };
 }
 
 /**
@@ -1477,32 +1526,90 @@ export function markQuery(channels, table, skip = []) {
 	return q;
 }
 
-function hist({ bins }) {
-	const width = 125;
-	const height = 85;
-	const margin = { top: 20, right: 20, bottom: 20, left: 0 };
+// @deno-types="npm:@types/d3@7.4.3"
+import * as d3 from "https://esm.sh/d3@7.8.5";
 
-	const x = d3
-		.scaleLinear()
-		.domain([bins.at(0).x0, bins.at(-1).x1])
+/**
+ * @typedef Bin
+ * @property {number} x0
+ * @property {number} x1
+ * @property {number} length
+ */
+
+/**
+ * @typedef HistogramOptions
+ * @property {number} [width]
+ * @property {number} [height]
+ * @property {number} [marginTop]
+ * @property {number} [marginRight]
+ * @property {number} [marginBottom]
+ * @property {number} [marginLeft]
+ * @property {number} [nullCount]
+ * @property {string} [fillColor]
+ * @property {string} [nullFillColor]
+ * @property {SVGElement} [el]
+ */
+
+/**
+ * @param {Array<Bin>} data
+ * @param {HistogramOptions} [options]
+ */
+function hist(data, options = {}) {
+	let bins = [...data];
+	bins.sort((a, b) => a.x0 - b.x0);
+
+	// TODO: idk these types are really annoying
+	let scaleLinear = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
+		// @ts-expect-error - d3 types are incorrect
+		.scaleLinear);
+	let create = /** @type {import("npm:@types/d3-selection").create} */ (d3
+		// @ts-expect-error - d3 types are incorrect
+		.create);
+	let brushX =
+		// @ts-expect-error - d3 types are incorrect
+		/** @type {import("npm:@types/d3-brush").brushX} */ (d3.brushX);
+	let axisBottom =
+		// @ts-expect-error - d3 types are incorrect
+		/** @type {import("npm:@types/d3-axis").axisBottom} */ (d3.axisBottom);
+
+	let {
+		width = 125,
+		height = 40,
+		marginTop = 0,
+		marginRight = 0,
+		marginBottom = 12,
+		marginLeft = 2,
+		nullCount = 0,
+		fillColor = "#d8b4fe",
+		nullFillColor = "#f97316",
+	} = options;
+
+	fillColor = "#fdba74";
+	nullFillColor = "#c2410c";
+
+	// fillColor = "rgb(146, 123, 209)"
+	// nullFillColor = "rgb(209, 209, 123)"
+
+	let avgBinWidth = nullCount === 0 ? 0 : width / (bins.length + 1);
+
+	let x = scaleLinear()
+		.domain([bins[0].x0, bins[bins.length - 1].x1])
 		.nice()
-		.range([margin.left, width - margin.right]);
+		.range([marginLeft + avgBinWidth, width - marginRight]);
 
-	const y = d3
-		.scaleLinear()
-		.domain([0, d3.max(bins, (d) => d.length)])
-		.range([height - margin.bottom, margin.top]);
+	let y = scaleLinear()
+		.domain([0, Math.max(nullCount, ...bins.map((d) => d.length))])
+		.range([height - marginBottom, marginTop]);
 
-	const svg = d3
-		.create("svg")
+	let svg = create("svg")
 		.attr("width", width)
 		.attr("height", height)
 		.attr("viewBox", [0, 0, width, height])
-		.attr("style", "max-width: 100%; height: auto;");
+		.attr("style", "max-width: 100%; height: auto; overflow: visible;");
 
 	svg
 		.append("g")
-		.attr("fill", "steelblue")
+		.attr("fill", fillColor)
 		.selectAll()
 		.data(bins)
 		.join("rect")
@@ -1511,30 +1618,74 @@ function hist({ bins }) {
 		.attr("y", (d) => y(d.length))
 		.attr("height", (d) => y(0) - y(d.length));
 
+	// Add the null bin separately
+	if (nullCount > 0) {
+		let nullXScale = scaleLinear()
+			.range([marginLeft, marginLeft + avgBinWidth]);
+
+		let nullGrp = svg
+			.append("g")
+			.attr("fill", nullFillColor)
+			.attr("color", nullFillColor);
+
+		nullGrp.append("rect")
+			.attr("x", nullXScale(0))
+			.attr("width", nullXScale(1) - nullXScale(0))
+			.attr("y", y(nullCount))
+			.attr("height", y(0) - y(nullCount))
+			.attr("fill", nullFillColor);
+
+		// Append the x-axis and add a null tick
+		let grp = nullGrp.append("g")
+			.attr("transform", `translate(0,${height - marginBottom})`)
+			.append("g")
+			.attr("transform", `translate(${nullXScale(0.5)}, 0)`)
+			.attr("class", "tick");
+
+		grp
+			.append("line")
+			.attr("stroke", "currentColor")
+			.attr("y2", 2.5);
+
+		grp
+			.append("text")
+			.attr("fill", "currentColor")
+			.attr("y", 4.5)
+			.attr("dy", "0.71em")
+			.attr("text-anchor", "middle")
+			.attr("font-size", "10")
+			.text("∅");
+	}
+
 	svg
 		.append("g")
 		.attr("class", "brush")
 		.call(
-			d3.brushX().extent([
-				[margin.left, margin.top],
-				[width - margin.right, height - margin.bottom],
+			brushX().extent([
+				[marginLeft + avgBinWidth, marginTop],
+				[width - marginRight, height - marginBottom],
 			]),
 		);
+
 	svg
 		.append("g")
-		.attr("class", "brush")
-		.call(d3.brushX().extent([height, margin.bottom]));
+		.attr("transform", `translate(0,${height - marginBottom})`)
+		.call(axisBottom(x).ticks(width / 100, "s").tickSize(2.5))
+		.call((g) => {
+			g.select(".domain").remove();
+			g.attr("class", "gray");
+		});
 
-	// Add the x-axis and label.
-	svg
-		.append("g")
-		.attr("transform", `translate(0,${height - margin.bottom})`)
-		.call(
-			d3
-				.axisBottom(x)
-				.ticks(width / 100)
-				.tickSizeOuter(0),
-		);
+	// Apply styles for all axis ticks
+	svg.selectAll(".tick")
+		.attr("font-family", "var(--sans-serif)")
+		.attr("font-weight", "normal");
 
-	return svg.node();
+	// just give me this code
+	// if it's the last tick align text to the right
+
+	let node = svg.node();
+	assert(node, "Expected SVGElement");
+
+	return node;
 }
