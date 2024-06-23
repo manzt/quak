@@ -85,10 +85,16 @@ class Widget(anywidget.AnyWidget):
 
     @anywidget.experimental.command
     def _query(self, msg: dict, buffers: list[bytes]):
-        print(msg["sql"])
-        result = self._conn.query(msg["sql"]).arrow()
-        ipc = table_to_ipc(result)
-        return True, [ipc.tobytes()]
+        sql = msg["sql"]
+        if msg["type"] == "arrow":
+            result = self._conn.query(sql).arrow()
+            ipc = table_to_ipc(result)
+            return True, [ipc.tobytes()]
+        if msg["type"] == "exec":
+            print(sql)
+            self._conn.execute(sql)
+            return True, []
+        raise ValueError(f"Unknown query type: {msg['type']}")
 
     @anywidget.experimental.command
     def _execute(self, msg: dict, buffers: list[bytes]):

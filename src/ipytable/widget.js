@@ -116,11 +116,16 @@ class Histogram extends mc.MosaicClient {
 	/** @type {Array<Channel>} */
 	#channels = [];
 
+	#markSet = new Set();
+
+	/** @type {Interval1D} */
+	#interval;
+
 	/** @type {any} */
 	_info = undefined;
 
 	/**
-	 * @param {{ table: string, column: string, type: "number" | "date", filterBy?: string }} source
+	 * @param {{ table: string, column: string, type: "number" | "date", filterBy?: mc.Selection }} source
 	 */
 	constructor(source) {
 		super(source.filterBy);
@@ -148,6 +153,10 @@ class Histogram extends mc.MosaicClient {
 		for (let [channel, entry] of Object.entries(encodings)) {
 			process(channel, entry);
 		}
+		this.#interval = new Interval1D(this, {
+			channel: "x",
+			selection: this.filterBy,
+		});
 	}
 
 	/** @returns {Array<{ table: string, column: string, stats: Array<string> }>} */
@@ -225,15 +234,20 @@ class Histogram extends mc.MosaicClient {
 			x1: d.x2,
 			length: d.y,
 		}));
-		// TODO: Handle nulls
-		let nullCount = 0;
-		let nullBinIndex = bins.findIndex((b) => b.x0 == null);
-		if (nullBinIndex >= 0) {
-			nullCount = bins[nullBinIndex].length;
-			bins.splice(nullBinIndex, 1);
+		if (!this.#interval.initialized) {
+			// TODO: Handle nulls
+			let nullCount = 0;
+			let nullBinIndex = bins.findIndex((b) => b.x0 == null);
+			if (nullBinIndex >= 0) {
+				nullCount = bins[nullBinIndex].length;
+				bins.splice(nullBinIndex, 1);
+			}
+			this.svg = hist(bins, { nullCount, type: this.#source.type });
+			this.#interval.init(this.svg);
+			this.#el.appendChild(this.svg.node());
+		} else {
+			this.svg?.update(bins);
 		}
-		let svg = hist(bins, { nullCount, type: this.#source.type });
-		this.#el.appendChild(svg);
 		return this;
 	}
 
@@ -244,6 +258,7 @@ class Histogram extends mc.MosaicClient {
 			getAttribute(_name) {
 				return undefined;
 			},
+			markSet: this.#markSet,
 		};
 	}
 }
@@ -261,10 +276,14 @@ export default () => {
 				/** @param {{ type: "arrow", sql: string }} arg */
 				async query({ type, sql }) {
 					assert(
-						type === "arrow",
+						type === "arrow" || type === "exec",
 						"Only arrow queries are supported",
 					);
-					let [_, buffers] = await invoke("_query", { sql });
+					assert(typeof sql === "string", "SQL must be a string");
+					let [_, buffers] = await invoke("_query", { type, sql });
+					if (buffers.length === 0) {
+						return;
+					}
 					let table = arrow.tableFromIPC(buffers[0]);
 					return table;
 				},
@@ -304,6 +323,9 @@ export default () => {
 			await summary.ready();
 
 			let $brush = mc.Selection.crossfilter();
+			// @ts-expect-error - missing types
+			window.coordinator = coordinator;
+			// @ts-expect-error - missing types
 			window.$brush = $brush;
 
 			let columns = summary
@@ -1522,8 +1544,8 @@ function defer() {
  * @returns {msql.Query} a Query instance
  */
 export function markQuery(channels, table, skip = []) {
-	const q = msql.Query.from({ source: table });
-	const dims = new Set();
+	let q = msql.Query.from({ source: table });
+	let dims = new Set();
 	let aggr = false;
 
 	for (const c of channels) {
@@ -1542,11 +1564,9 @@ export function markQuery(channels, table, skip = []) {
 			q.select({ [as]: field });
 		}
 	}
-
 	if (aggr) {
 		q.groupby(Array.from(dims));
 	}
-
 	return q;
 }
 
@@ -1578,7 +1598,7 @@ let min = // @ts-expect-error - d3 types are incorrect
 let max = // @ts-expect-error - d3 types are incorrect
 	/** @type {import("npm:@types/d3-array").max} */ (d3.max);
 let ascending = // @ts-expect-error - d3 types are incorrect
-	/** @type {import("npm:@types/d3-array").max} */ (d3.ascending);
+	/** @type {import("npm:@types/d3-array").ascending} */ (d3.ascending);
 
 /**
  * @typedef Bin
@@ -1727,16 +1747,6 @@ function hist(data, options = {}) {
 
 	svg
 		.append("g")
-		.attr("class", "brush")
-		.call(
-			brushX().extent([
-				[marginLeft + avgBinWidth, marginTop],
-				[width - marginRight, height - marginBottom],
-			]),
-		);
-
-	svg
-		.append("g")
 		.attr("transform", `translate(0,${height - marginBottom})`)
 		.call(xAxis)
 		.call((g) => {
@@ -1754,9 +1764,34 @@ function hist(data, options = {}) {
 		.attr("style", "user-select: none;");
 
 	let node = svg.node();
-	assert(node, "Expected SVGElement");
-
-	return node;
+	Object.defineProperties(x, {
+		type: { value: "linear" },
+		domain: { value: x.domain() },
+		range: { value: x.range() },
+	});
+	Object.defineProperties(y, {
+		type: { value: "linear" },
+		domain: { value: y.domain() },
+		range: { value: y.range() },
+	});
+	assert(node, "Expected node to be defined");
+	return {
+		node: () => node,
+		/**
+		 * @param {string} type
+		 * @returns {Scale}
+		 */
+		scale: (type) => {
+			assert(type === "x" || type === "y", "Expected type to be x or y");
+			// @ts-expect-error - Types are wack
+			return type === "x" ? x : y;
+		},
+		brushExtent: () => [
+			[marginLeft + avgBinWidth, marginTop],
+			[width - marginRight, height - marginBottom],
+		],
+		update(data) {},
+	};
 }
 
 class Interval1D {
@@ -1775,89 +1810,76 @@ class Interval1D {
 		selection,
 		field = undefined,
 		pixelSize = 1,
-		peers = true,
 	}) {
 		this.client = client;
 		this.channel = channel;
 		this.pixelSize = pixelSize || 1;
 		this.selection = selection;
-		this.peers = peers;
 		this.field = field || client.channelField(channel).field;
 		assert(channel === "x", "Expected channel to be x");
-		this.brush = d3.brushX();
-		this.brush.on("brush end", ({ selection }) => this.publish(selection));
+		this.brush = brushX();
+		this.brush.on("brush end", ({ selection }) => {
+			this.publish(selection);
+		});
+		this.initialized = false;
 	}
 
 	reset() {
 		this.value = undefined;
-		if (this.g) this.brush.reset(this.g);
+		if (this.g) this.brush.clear(this.g);
 	}
 
 	activate() {
 		this.selection.activate(this.clause(this.value || [0, 1]));
 	}
 
-	/**
-	 * @param {number[]} extent
-	 */
+	/** @param {number[] | undefined} extent */
 	publish(extent) {
 		let range = undefined;
-		let scale = this.scale;
-		let g = this.g;
-		assert(scale, "Expected scale to be defined");
-		assert(g, "Expected g to be defined");
-		if (extent) {
+		if (extent && this.scale) {
+			let scale = this.scale;
 			range = extent
 				.map((v) => invert(v, scale, this.pixelSize))
 				.sort((a, b) => a - b);
 		}
 		if (!closeTo(range, this.value)) {
 			this.value = range;
-			g.call(this.brush.moveSilent, extent);
+			this.g?.call(this.brush.move, extent);
 			this.selection.update(this.clause(range));
 		}
 	}
 
-	/**
-	 * @param {number[] | undefined} value
-	 */
+	/** @param {number[] | undefined} value */
 	clause(value) {
-		const { client, pixelSize, field, scale } = this;
-		return mc.interval(field, value, {
+		// @ts-expect-error - Types are wack
+		let clause = mc.interval(this.field, value, {
 			source: this,
-			clients: this.peers ? client.plot.markSet : new Set().add(client),
-			scale,
-			pixelSize,
+			clients: new Set().add(this.client),
+			scale: this.scale,
+			pixelSize: this.pixelSize,
 		});
+		return clause;
 	}
 
 	/**
-	 * @param {SVGElement & { scale: (name: "x" | "y" | string) => import("npm:@types/d3-scale").ScaleLinear<number, number> }} svg
-	 * @param {ReturnType<typeof select>} root
+	 * @param {ReturnType<typeof hist>} svg
 	 */
-	init(svg, root) {
-		const { brush, channel } = this;
-		this.scale = svg.scale(channel);
+	init(svg) {
+		let scale = this.scale = svg.scale(this.channel);
+		// This is maybe undefined
+		this.brush.extent(svg.brushExtent());
+		let range = this.value?.map((d) => scale(d)).sort(ascending);
 
-		const rx = svg.scale("x").range;
-		const ry = svg.scale("y").range;
-		// @ts-expect-error - d3 types are incorrect
-		brush.extent([[min(rx), min(ry)], max(rx), max(ry)]);
-		// @ts-expect-error - d3 types are incorrect
-		const range = this.value?.map(this.scale.apply).sort(ascending);
-		const facets = select(svg).selectAll('g[aria-label="facet"]');
-		// @ts-expect-error - d3 types are incorrect
-		root = facets.size() ? facets : select(root ?? svg);
-		this.g = root
+		this.g = select(svg.node())
 			.append("g")
-			.attr("class", `interval-${channel}`)
 			.each(patchScreenCTM)
-			.call(brush)
-			.call(brush.moveSilent, range);
+			.call(this.brush)
+			.call(this.brush.move, range || [0, 1]);
 
-		svg.addEventListener("pointerenter", (evt) => {
+		svg.node().addEventListener("pointerenter", (evt) => {
 			if (!evt.buttons) this.activate();
 		});
+		this.initialized = true;
 	}
 }
 
@@ -1900,3 +1922,16 @@ const closeTo = (() => {
 		) || false;
 	};
 })();
+
+/** @typedef {[number, number]| [Date, Date]} Extent */
+/**
+ * @typedef ScaleBase
+ * @property {ScaleType} type
+ * @property {Extent} domain
+ * @property {[number, number]} range
+ * @property {number} [base]
+ * @property {number} [constant]
+ * @property {number} [exponent]
+ */
+
+/** @typedef {ScaleBase & import("npm:@types/d3-scale").ScaleLinear<number, number>} Scale */
