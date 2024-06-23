@@ -107,7 +107,7 @@ class TableSummary extends mc.MosaicClient {
 class Histogram extends mc.MosaicClient {
 	type = "rectY";
 
-	/** @type {{ table: string, column: string }} */
+	/** @type {{ table: string, column: string, type: "number" | "date" }} */
 	#source;
 
 	/** @type {HTMLElement} */
@@ -120,7 +120,7 @@ class Histogram extends mc.MosaicClient {
 	_info = undefined;
 
 	/**
-	 * @param {{ table: string, column: string }} source
+	 * @param {{ table: string, column: string, type: "number" | "date" }} source
 	 * @param {{ filterBy?: string }} options
 	 */
 	constructor(source, options = {}) {
@@ -233,7 +233,7 @@ class Histogram extends mc.MosaicClient {
 			nullCount = bins[nullBinIndex].length;
 			bins.splice(nullBinIndex, 1);
 		}
-		let svg = hist(bins, { nullCount });
+		let svg = hist(bins, { nullCount, type: this.#source.type });
 		this.#el.appendChild(svg);
 		return this;
 	}
@@ -305,11 +305,19 @@ export default () => {
 			await summary.ready();
 			let columns = summary
 				.info
-				.filter((entry) => entry.type === "number")
-				.map(({ column }) => {
+				.filter((entry) => entry.type === "number" || entry.type === "date")
+				.map(({ column, type }) => {
+					assert(
+						type === "number" || type === "date",
+						"Invalid type",
+					);
 					return {
 						name: column,
-						client: new Histogram({ table: summary.table, column }),
+						client: new Histogram({
+							table: summary.table,
+							column,
+							type,
+						}),
 					};
 				});
 
@@ -1285,6 +1293,7 @@ const intervals = /** @type {const} */ ([
  * @param {number} min
  * @param {number} max
  * @param {number} steps
+ * @returns {{ interval: typeof intervals[number][0] | typeof MILLISECOND, step: number }}
  */
 function timeInterval(min, max, steps) {
 	const span = max - min;
@@ -1558,8 +1567,23 @@ import * as d3 from "https://esm.sh/d3@7.8.5";
  * @property {number} [nullCount]
  * @property {string} [fillColor]
  * @property {string} [nullFillColor]
+ * @property {"number" | "date"} [type]
  * @property {SVGElement} [el]
  */
+
+let timeFormat = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
+	// @ts-expect-error - d3 types are incorrect
+	.timeFormat);
+
+let formatMap = {
+	[MILLISECOND]: timeFormat("%L"),
+	[SECOND]: timeFormat("%S s"),
+	[MINUTE]: timeFormat("%H:%M"),
+	[HOUR]: timeFormat("%H:%M"),
+	[DAY]: timeFormat("%b %d"),
+	[MONTH]: timeFormat("%b %Y"),
+	[YEAR]: timeFormat("%Y"),
+};
 
 /**
  * @param {Array<Bin>} data
@@ -1573,6 +1597,9 @@ function hist(data, options = {}) {
 	let scaleLinear = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
 		// @ts-expect-error - d3 types are incorrect
 		.scaleLinear);
+	let scaleTime = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
+		// @ts-expect-error - d3 types are incorrect
+		.scaleTime);
 	let create = /** @type {import("npm:@types/d3-selection").create} */ (d3
 		// @ts-expect-error - d3 types are incorrect
 		.create);
@@ -1582,31 +1609,49 @@ function hist(data, options = {}) {
 	let axisBottom =
 		// @ts-expect-error - d3 types are incorrect
 		/** @type {import("npm:@types/d3-axis").axisBottom} */ (d3.axisBottom);
+	let format = // @ts-expect-error - d3 types are incorrect
+		/** @type {import("npm:@types/d3-format").format} */ (d3.format);
 
 	let {
 		width = 125,
 		height = 40,
 		marginTop = 0,
-		marginRight = 0,
+		marginRight = 2,
 		marginBottom = 12,
 		marginLeft = 2,
 		nullCount = 0,
-		fillColor = "#d8b4fe",
-		nullFillColor = "#f97316",
+		fillColor = "#fdba74",
+		nullFillColor = "#c2410c",
 	} = options;
-
-	fillColor = "#fdba74";
-	nullFillColor = "#c2410c";
-
-	// fillColor = "rgb(146, 123, 209)"
-	// nullFillColor = "rgb(209, 209, 123)"
 
 	let avgBinWidth = nullCount === 0 ? 0 : width / (bins.length + 1);
 
-	let x = scaleLinear()
-		.domain([bins[0].x0, bins[bins.length - 1].x1])
-		.nice()
-		.range([marginLeft + avgBinWidth, width - marginRight]);
+	let x, xAxis;
+	let midFirstBin = (bins[0].x0 + bins[0].x1) / 2;
+	let midLastBin = (bins[bins.length - 1].x0 + bins[bins.length - 1].x1) / 2;
+
+	if (options.type === "date") {
+		let interval = timeInterval(
+			bins[0].x0,
+			bins[bins.length - 1].x1,
+			bins.length,
+		);
+		x = scaleTime()
+			.domain([bins[0].x0, bins[bins.length - 1].x1])
+			.range([marginLeft + avgBinWidth, width - marginRight]);
+		xAxis = axisBottom(x)
+			.tickValues([midFirstBin, midLastBin])
+			.tickFormat(formatMap[interval.interval])
+			.tickSize(2.5);
+	} else {
+		x = scaleLinear()
+			.domain([bins[0].x0, bins[bins.length - 1].x1])
+			.range([marginLeft + avgBinWidth, width - marginRight]);
+		xAxis = axisBottom(x)
+			.tickValues([midFirstBin, midLastBin])
+			.tickFormat(format("~s"))
+			.tickSize(2.5);
+	}
 
 	let y = scaleLinear()
 		.domain([0, Math.max(nullCount, ...bins.map((d) => d.length))])
@@ -1681,10 +1726,13 @@ function hist(data, options = {}) {
 	svg
 		.append("g")
 		.attr("transform", `translate(0,${height - marginBottom})`)
-		.call(axisBottom(x).ticks(width / 100, "s").tickSize(2.5))
+		.call(xAxis)
 		.call((g) => {
 			g.select(".domain").remove();
 			g.attr("class", "gray");
+			g.selectAll(".tick text")
+				.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
+				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
 		});
 
 	// Apply styles for all axis ticks
