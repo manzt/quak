@@ -9,10 +9,10 @@ import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
 
 // ugh no types for these
 import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.9.0/+esm";
-import * as sql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+esm";
+import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+esm";
 
 /** @typedef {{ schema: arrow.Schema } & AsyncIterator<arrow.Table, arrow.Table>} RecordBatchReader */
-/** @typedef {(sql: string) => Promise<RecordBatchReader>} FetchRecordBatchReader */
+/** @typedef {(ctx: { type: "arrow", sql: string }) => Promise<RecordBatchReader>} FetchRecordBatchReader */
 
 /** @typedef {{ _table_name: string, _columns: Array<string> }} Model */
 
@@ -144,7 +144,7 @@ class Histogram extends mc.MosaicClient {
 		};
 		let encodings = {
 			x: bin(source.column),
-			y: sql.count(),
+			y: msql.count(),
 		};
 		for (let [channel, entry] of Object.entries(encodings)) {
 			process(channel, entry);
@@ -259,10 +259,12 @@ export default () => {
 		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
 		initialize({ model, experimental: { invoke } }) {
 			let connector = {
-				/** @param {string | { type: "arrow", sql: string }} arg */
-				async query(arg) {
-					let sql = typeof arg === "string" ? arg : arg.sql;
-					assert(typeof sql === "string", "Expected a string");
+				/** @param {{ type: "arrow", sql: string }} arg */
+				async query({ type, sql }) {
+					assert(
+						type === "arrow",
+						"Only arrow queries are supported",
+					);
 					let [_, buffers] = await invoke("_query", { sql });
 					let table = arrow.tableFromIPC(buffers[0]);
 					return table;
@@ -275,10 +277,11 @@ export default () => {
 			});
 			coordinator.connect(summary);
 			/**
-			 * @param {string} sql
+			 * @param {{ type: "arrow", sql: string }} arg
 			 * @returns {Promise<RecordBatchReader>}
 			 */
-			async function createRecordBatchReaderJupyter(sql) {
+			async function createRecordBatchReaderJupyter({ type, sql }) {
+				assert(type === "arrow", "Only arrow queries are supported");
 				let [done, [ipc]] = await invoke("_execute", { sql });
 				let first = true;
 				let table = arrow.tableFromIPC(ipc);
@@ -504,21 +507,25 @@ class _HTMLElement {
 	}
 }
 
+/** @param {string} field */
+function asc(field) {
+	// doesn't sort nulls for asc
+	let expr = msql.desc(field);
+	expr._expr[0] = expr._expr[0].replace("DESC", "ASC");
+	return expr;
+}
+
 class ArrowDataTable extends _HTMLElement {
 	/** @type {FetchRecordBatchReader} */
 	#execute;
-
 	/** @type {Array<{ field: string; order: "asc" | "desc" }>}*/
 	#orderby;
-
 	/** @type {() => Promise<void>} */
 	#resetTable = async () => {};
-
-	/** @type {{ height?: number, tableName?: string }} */
-	#options;
-
 	/** @type {Array<ColumnSummaryVis>} */
 	#columns;
+	/** @type {{ height?: number, tableName: string }} */
+	#options;
 
 	/**
 	 * @param {FetchRecordBatchReader} execute
@@ -529,20 +536,24 @@ class ArrowDataTable extends _HTMLElement {
 		super();
 		this.#execute = execute;
 		this.#orderby = [];
-		this.#options = options;
 		this.#columns = columns;
+		this.#options = { tableName: "df", ...options };
 		this.shadowRoot.appendChild(html`<style>${STYLES}</style>`);
 	}
 
 	async #createRowReader() {
-		let sql = `SELECT * FROM ${this.#options.tableName ?? "df"}`;
-		if (this.#orderby.length) {
-			sql += " ORDER BY " + this.#orderby
-				.map((o) => `${o.field} ${o.order.toUpperCase()} NULLS LAST`)
-				.join(", ");
+		let query = msql.Query
+			.from(this.#options.tableName)
+			.select("*");
+		if (this.#orderby.length > 0) {
+			query.orderby(
+				...this.#orderby.map((o) =>
+					o.order === "asc" ? asc(o.field) : msql.desc(o.field)
+				),
+			);
 		}
-		console.debug(sql);
-		let recordBatchReader = await this.#execute(sql);
+		let sql = query.toString();
+		let recordBatchReader = await this.#execute({ type: "arrow", sql });
 		return new TableRowReader(recordBatchReader);
 	}
 
@@ -1194,7 +1205,7 @@ function channelScale(mark, channel) {
 			options.constant = plot.getAttribute(`${channel}Constant`) ?? 1;
 			break;
 	}
-	return sql.scaleTransform(options);
+	return msql.scaleTransform(options);
 }
 
 // @deno-fmt-ignore
@@ -1428,8 +1439,8 @@ function bins(min, max, options) {
  */
 function dateBin(expr, interval, steps = 1) {
 	const i = `INTERVAL ${steps} ${interval}`;
-	const d = sql.asColumn(expr);
-	return sql.sql`TIME_BUCKET(${i}, ${d})`.annotate({ label: interval });
+	const d = msql.asColumn(expr);
+	return msql.sql`TIME_BUCKET(${i}, ${d})`.annotate({ label: interval });
 }
 
 /**
@@ -1441,7 +1452,7 @@ function fieldEntry(channel, field) {
 	return {
 		channel,
 		field,
-		as: field instanceof sql.Ref ? field.column : channel,
+		as: field instanceof msql.Ref ? field.column : channel,
 	};
 }
 
@@ -1495,10 +1506,10 @@ function defer() {
  * @param {Array<Channel>} channels array of visual encoding channel specs.
  * @param {string} table the table to query.
  * @param {Array<string>} skip an optional array of channels to skip. Mark subclasses can skip channels that require special handling.
- * @returns {sql.Query} a Query instance
+ * @returns {msql.Query} a Query instance
  */
 export function markQuery(channels, table, skip = []) {
-	const q = sql.Query.from({ source: table });
+	const q = msql.Query.from({ source: table });
 	const dims = new Set();
 	let aggr = false;
 
