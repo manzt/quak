@@ -120,11 +120,10 @@ class Histogram extends mc.MosaicClient {
 	_info = undefined;
 
 	/**
-	 * @param {{ table: string, column: string, type: "number" | "date" }} source
-	 * @param {{ filterBy?: string }} options
+	 * @param {{ table: string, column: string, type: "number" | "date", filterBy?: string }} source
 	 */
-	constructor(source, options = {}) {
-		super(options.filterBy);
+	constructor(source) {
+		super(source.filterBy);
 		this.#source = source;
 		/**
 		 * @param {string} channel
@@ -303,6 +302,10 @@ export default () => {
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
 		async render({ model, el }) {
 			await summary.ready();
+
+			let $brush = mc.Selection.crossfilter();
+			window.$brush = $brush;
+
 			let columns = summary
 				.info
 				.filter((entry) => entry.type === "number" || entry.type === "date")
@@ -317,6 +320,7 @@ export default () => {
 							table: summary.table,
 							column,
 							type,
+							filterBy: $brush,
 						}),
 					};
 				});
@@ -428,7 +432,7 @@ function thcol(field, minWidth, sortState, vis) {
 			${sortButton}
 		</div>
 		${verticalResizeHandle}
-		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px" }}>${formatDataTypeName(field.type)}</span>
+		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px", userSelect: "none" }}>${formatDataTypeName(field.type)}</span>
 		${vis?.client.plot.el}
 	</th>`;
 
@@ -1548,6 +1552,33 @@ export function markQuery(channels, table, skip = []) {
 
 // @deno-types="npm:@types/d3@7.4.3"
 import * as d3 from "https://esm.sh/d3@7.8.5";
+// TODO: idk these types are really annoying
+let scaleLinear = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
+	// @ts-expect-error - d3 types are incorrect
+	.scaleLinear);
+let scaleTime = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
+	// @ts-expect-error - d3 types are incorrect
+	.scaleTime);
+let create = /** @type {import("npm:@types/d3-selection").create} */ (d3
+	// @ts-expect-error - d3 types are incorrect
+	.create);
+let select = /** @type {import("npm:@types/d3-selection").select} */ (d3
+	// @ts-expect-error - d3 types are incorrect
+	.select);
+let brushX =
+	// @ts-expect-error - d3 types are incorrect
+	/** @type {import("npm:@types/d3-brush").brushX} */ (d3.brushX);
+let axisBottom =
+	// @ts-expect-error - d3 types are incorrect
+	/** @type {import("npm:@types/d3-axis").axisBottom} */ (d3.axisBottom);
+let format = // @ts-expect-error - d3 types are incorrect
+	/** @type {import("npm:@types/d3-format").format} */ (d3.format);
+let min = // @ts-expect-error - d3 types are incorrect
+	/** @type {import("npm:@types/d3-array").min} */ (d3.min);
+let max = // @ts-expect-error - d3 types are incorrect
+	/** @type {import("npm:@types/d3-array").max} */ (d3.max);
+let ascending = // @ts-expect-error - d3 types are incorrect
+	/** @type {import("npm:@types/d3-array").max} */ (d3.ascending);
 
 /**
  * @typedef Bin
@@ -1592,25 +1623,6 @@ let formatMap = {
 function hist(data, options = {}) {
 	let bins = [...data];
 	bins.sort((a, b) => a.x0 - b.x0);
-
-	// TODO: idk these types are really annoying
-	let scaleLinear = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
-		// @ts-expect-error - d3 types are incorrect
-		.scaleLinear);
-	let scaleTime = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
-		// @ts-expect-error - d3 types are incorrect
-		.scaleTime);
-	let create = /** @type {import("npm:@types/d3-selection").create} */ (d3
-		// @ts-expect-error - d3 types are incorrect
-		.create);
-	let brushX =
-		// @ts-expect-error - d3 types are incorrect
-		/** @type {import("npm:@types/d3-brush").brushX} */ (d3.brushX);
-	let axisBottom =
-		// @ts-expect-error - d3 types are incorrect
-		/** @type {import("npm:@types/d3-axis").axisBottom} */ (d3.axisBottom);
-	let format = // @ts-expect-error - d3 types are incorrect
-		/** @type {import("npm:@types/d3-format").format} */ (d3.format);
 
 	let {
 		width = 125,
@@ -1746,3 +1758,145 @@ function hist(data, options = {}) {
 
 	return node;
 }
+
+class Interval1D {
+	/**
+	 * @param {Histogram} client
+	 * @param {{
+	 *   channel: string;
+	 *   selection: mc.Selection,
+	 *   field?: string;
+	 *   pixelSize?: number;
+	 *   peers?: boolean;
+	 * }} options
+	 */
+	constructor(client, {
+		channel,
+		selection,
+		field = undefined,
+		pixelSize = 1,
+		peers = true,
+	}) {
+		this.client = client;
+		this.channel = channel;
+		this.pixelSize = pixelSize || 1;
+		this.selection = selection;
+		this.peers = peers;
+		this.field = field || client.channelField(channel).field;
+		assert(channel === "x", "Expected channel to be x");
+		this.brush = d3.brushX();
+		this.brush.on("brush end", ({ selection }) => this.publish(selection));
+	}
+
+	reset() {
+		this.value = undefined;
+		if (this.g) this.brush.reset(this.g);
+	}
+
+	activate() {
+		this.selection.activate(this.clause(this.value || [0, 1]));
+	}
+
+	/**
+	 * @param {number[]} extent
+	 */
+	publish(extent) {
+		let range = undefined;
+		let scale = this.scale;
+		let g = this.g;
+		assert(scale, "Expected scale to be defined");
+		assert(g, "Expected g to be defined");
+		if (extent) {
+			range = extent
+				.map((v) => invert(v, scale, this.pixelSize))
+				.sort((a, b) => a - b);
+		}
+		if (!closeTo(range, this.value)) {
+			this.value = range;
+			g.call(this.brush.moveSilent, extent);
+			this.selection.update(this.clause(range));
+		}
+	}
+
+	/**
+	 * @param {number[] | undefined} value
+	 */
+	clause(value) {
+		const { client, pixelSize, field, scale } = this;
+		return mc.interval(field, value, {
+			source: this,
+			clients: this.peers ? client.plot.markSet : new Set().add(client),
+			scale,
+			pixelSize,
+		});
+	}
+
+	/**
+	 * @param {SVGElement & { scale: (name: "x" | "y" | string) => import("npm:@types/d3-scale").ScaleLinear<number, number> }} svg
+	 * @param {ReturnType<typeof select>} root
+	 */
+	init(svg, root) {
+		const { brush, channel } = this;
+		this.scale = svg.scale(channel);
+
+		const rx = svg.scale("x").range;
+		const ry = svg.scale("y").range;
+		// @ts-expect-error - d3 types are incorrect
+		brush.extent([[min(rx), min(ry)], max(rx), max(ry)]);
+		// @ts-expect-error - d3 types are incorrect
+		const range = this.value?.map(this.scale.apply).sort(ascending);
+		const facets = select(svg).selectAll('g[aria-label="facet"]');
+		// @ts-expect-error - d3 types are incorrect
+		root = facets.size() ? facets : select(root ?? svg);
+		this.g = root
+			.append("g")
+			.attr("class", `interval-${channel}`)
+			.each(patchScreenCTM)
+			.call(brush)
+			.call(brush.moveSilent, range);
+
+		svg.addEventListener("pointerenter", (evt) => {
+			if (!evt.buttons) this.activate();
+		});
+	}
+}
+
+/**
+ * @param {number} value
+ * @param {import("npm:@types/d3-scale").ScaleLinear<number, number>} scale
+ * @param {number} [pixelSize]
+ * @returns {number} pixelSize
+ */
+function invert(value, scale, pixelSize = 1) {
+	return scale.invert(pixelSize * Math.floor(value / pixelSize));
+}
+
+/**
+ * Patch the getScreenCTM method to memoize the last non-null
+ * result seen. This will let the method continue to function
+ * even after the node is removed from the DOM.
+ */
+function patchScreenCTM() {
+	/** @type {SVGGraphicsElement} */
+	// @ts-ignore - this is a SVGGraphicsElement
+	// deno-lint-ignore no-this-alias
+	let node = this;
+	const getScreenCTM = node.getScreenCTM;
+	/** @type {DOMMatrix | null} */
+	let memo;
+	node.getScreenCTM = () => {
+		return node.isConnected ? (memo = getScreenCTM.call(node)) : memo;
+	};
+}
+
+const closeTo = (() => {
+	const EPS = 1e-12;
+	/** @type {(a: number[] | undefined, b: number[] | undefined) => boolean} */
+	return (a, b) => {
+		return a === b || (
+			a && b &&
+			Math.abs(a[0] - b[0]) < EPS &&
+			Math.abs(a[1] - b[1]) < EPS
+		) || false;
+	};
+})();
