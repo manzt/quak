@@ -48,58 +48,310 @@ import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+es
  * @property {number} [value] // orderby
  */
 
+/** @typedef {Histogram} ColumnSummaryVis */
+
+export default () => {
+	let coordinator = new mc.Coordinator();
+	return {
+		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
+		initialize({ experimental: { invoke } }) {
+			let connector = {
+				/** @param {{ type: "arrow" | "exec", sql: string }} arg */
+				async query({ type, sql }) {
+					let [_, buffers] = await invoke("_query", { type, sql });
+					if (buffers.length === 0) {
+						return;
+					}
+					let table = arrow.tableFromIPC(buffers[0]);
+					return table;
+				},
+				/**
+				 * @param {{ type: "arrow", sql: string }} arg
+				 * @returns {Promise<RecordBatchReader>}
+				 */
+				async queryBatches({ sql }) {
+					let [done, [ipc]] = await invoke("_execute", { sql });
+					let first = true;
+					let table = arrow.tableFromIPC(ipc);
+					return {
+						schema: table.schema,
+						async next() {
+							if (first) {
+								first = false;
+								return { done, value: table };
+							}
+							[done, [ipc]] = await invoke("_next_batch", {});
+							table = arrow.tableFromIPC(ipc);
+							return { done, value: table };
+						},
+					};
+				},
+			};
+			coordinator.databaseConnector(connector);
+		},
+		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
+		render({ model, el }) {
+			let table = new DataTable({
+				table: model.get("_table_name"),
+				columns: model.get("_columns"),
+			});
+			coordinator.connect(table);
+			el.appendChild(table.node());
+		},
+	};
+};
+
 /**
- * @typedef ColumnSummaryVis
- * @property {string} name
- * @property {Histogram} client
+ * @typedef DataTableOptions
+ * @property {string} table
+ * @property {Array<string>} columns
+ * @property {number} [height]
  */
 
-class TableSummary extends mc.MosaicClient {
-	/** @type {Array<Info> | undefined} */
-	#info = undefined;
+class DataTable extends mc.MosaicClient {
+	/** @type {DataTableOptions} */
+	#source;
+	/** @type {HTMLElement} */
+	#root = document.createElement("div");
+	/** @type {ShadowRoot} */
+	#shadowRoot = this.#root.attachShadow({ mode: "open" });
+	/** @type {HTMLTableSectionElement} */
+	#thead;
+	/** @type {HTMLTableSectionElement} */
+	#tbody;
+	/** @type {HTMLDivElement} */
+	#tableRoot;
+	/** @type {Array<{ field: string, order: "asc" | "desc" }>} */
+	#orderby = [];
+	/** @type {TableRowReader | undefined} */
+	#reader = undefined;
 
-	/**
-	 * @param {{ table: string, columns: Array<string> }} source
-	 */
+	/** @type {HTMLTableRowElement | undefined} */
+	#dataRow = undefined;
+
+	// options
+	#rows = 11.5;
+	#rowHeight = 22;
+	#columnWidth = 125;
+	#headerHeight = "50px";
+	refreshTableBody = async () => {};
+
+	/** @param {DataTableOptions} source */
 	constructor(source) {
 		super(undefined);
-		this.source = source;
-		this._deferred = defer();
-	}
+		this.#source = source;
 
-	ready() {
-		return this._deferred.promise;
-	}
+		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
+		// if maxHeight is set, calculate the number of rows to display
+		if (source.height) {
+			this.#rows = Math.floor(source.height / this.#rowHeight);
+			maxHeight = `${source.height}px`;
+		}
 
-	get table() {
-		return this.source.table;
-	}
-
-	get columns() {
-		return this.source.columns;
-	}
-
-	/** @type {Info[]} */
-	get info() {
-		assert(this.#info, "Field info not requested");
-		return this.#info;
+		/** @type {HTMLDivElement} */
+		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
+		this.#thead = document.createElement("thead");
+		this.#tbody = document.createElement("tbody");
+		// @deno-fmt-ignore
+		root.appendChild(
+			html.fragment`<table class="ipytable" style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
+		);
+		this.#shadowRoot.appendChild(html`<style>${STYLES}</style>`);
+		this.#shadowRoot.appendChild(root);
+		this.#tableRoot = root;
 	}
 
 	/** @returns {Array<{ table: string, column: string, stats: Array<string> }>} */
 	// @ts-expect-error - _field type is bad from MosaicClient
 	fields() {
-		return this.columns.map((column) => ({
-			table: this.table,
+		return this.#source.columns.map((column) => ({
+			table: this.#source.table,
 			column,
 			stats: [],
 		}));
 	}
 
-	/** @param {Array<Info>} info */
-	fieldInfo(info) {
-		this.#info = info;
-		this._deferred.resolve(info);
-		return this;
+	node() {
+		return this.#root;
+	}
+
+	async #createRowReader() {
+		let { queryBatches } = this.coordinator?.manager?.db;
+		assert(
+			typeof queryBatches === "function",
+			"Requires queryBatches for db.",
+		);
+		let query = msql.Query.from(this.#source.table).select("*");
+		if (this.#orderby.length > 0) {
+			query.orderby(
+				...this.#orderby.map((o) =>
+					o.order === "asc" ? asc(o.field) : msql.desc(o.field)
+				),
+			);
+		}
+		let inner = await queryBatches({
+			type: "arrow",
+			sql: query.toString(),
+		});
+		return new TableRowReader(inner);
+	}
+
+	/** @param {Array<Info>} infos */
+	async fieldInfo(infos) {
+		let reader = await this.#createRowReader();
+		let classes = classof(reader.schema);
+		let format = formatof(reader.schema);
+
+		// @deno-fmt-ignore
+		this.#dataRow = html`<tr><td></td>${
+			infos.map((info) => html.fragment`<td class=${classes[info.column]}></td>`)
+		}
+			<td style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></td>
+		</tr>`;
+
+		let $brush = mc.Selection.crossfilter();
+
+		let cols = reader.schema.fields.map((field) => {
+			let info = infos.find((c) => c.column === field.name);
+			assert(info, `No info for column ${field.name}`);
+			/** @type {signals.Signal<"unset" | "asc" | "desc">} */
+			let toggle = signals.signal("unset");
+			signals.effect(() => {
+				let orderby = this.#orderby.filter((o) => o.field !== field.name);
+				if (toggle.value !== "unset") {
+					orderby.unshift({
+						field: field.name,
+						order: toggle.value,
+					});
+				}
+				this.#orderby = orderby;
+				this.refreshTableBody();
+			});
+			/** @type {ColumnSummaryVis | undefined} */
+			let vis = undefined;
+			if (info.type === "number" || info.type === "date") {
+				vis = new Histogram({
+					table: this.#source.table,
+					column: field.name,
+					type: info.type,
+					filterBy: $brush,
+				});
+				this.coordinator.connect(vis);
+			}
+			return thcol(field, this.#columnWidth, toggle, vis);
+		});
+		// @deno-fmt-ignore
+		this.#thead.appendChild(
+			html`<tr style=${{ height: this.#headerHeight }}>
+				<th></th>
+				${cols}
+				<th style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></th>
+			</tr>`,
+		);
+
+		// scroll behavior
+		{
+			this.#tableRoot.addEventListener("scroll", async () => {
+				let isAtBottom =
+					this.#tableRoot.scrollHeight - this.#tableRoot.scrollTop <
+						this.#rows * this.#rowHeight * 1.5;
+				if (isAtBottom) {
+					await this.#appendRows(this.#rows, infos, format);
+				}
+			});
+		}
+
+		// highlight on hover
+		{
+			this.#tableRoot.addEventListener("mouseover", (event) => {
+				if (
+					isTableCellElement(event.target) &&
+					isTableRowElement(event.target.parentNode)
+				) {
+					const cell = event.target;
+					const row = event.target.parentNode;
+					highlight(cell, row);
+				}
+			});
+			this.#tableRoot.addEventListener("mouseout", (event) => {
+				if (
+					isTableCellElement(event.target) &&
+					isTableRowElement(event.target.parentNode)
+				) {
+					const cell = event.target;
+					const row = event.target.parentNode;
+					removeHighlight(cell, row);
+				}
+			});
+		}
+
+		// we need to put down here so the first effect can run and not exhaust the reader
+		this.refreshTableBody = async () => {
+			this.#reader = await this.#createRowReader();
+			this.#tbody.innerHTML = "";
+			this.#tableRoot.scrollTop = 0;
+			this.#appendRows(this.#rows * 2, infos, format);
+		};
+
+		this.refreshTableBody();
+	}
+
+	/**
+	 * Number of rows to append
+	 * @param {number} nrows
+	 * @param {Array<Info>} infos
+	 * @param {Record<string, (value: any) => string>} format
+	 */
+	async #appendRows(nrows, infos, format) {
+		nrows = Math.trunc(nrows);
+		assert(this.#reader, "No reader");
+		while (nrows >= 0) {
+			let result = this.#reader.next();
+			if (result.done) {
+				// we've exhausted all rows
+				break;
+			}
+			if (result.value.kind === "row") {
+				this.#appendRow(
+					result.value.data,
+					result.value.index,
+					infos,
+					format,
+				);
+				nrows--;
+				continue;
+			}
+			if (result.value.kind === "batch") {
+				await result.value.readNextBatch();
+				continue;
+			}
+		}
+	}
+
+	/**
+	 * @param {arrow.StructRowProxy} d
+	 * @param {number} i
+	 * @param {Array<Info>} infos
+	 * @param {Record<string, (value: any) => string>} format
+	 */
+	#appendRow(d, i, infos, format) {
+		const itr = this.#dataRow?.cloneNode(true);
+		let td = itr.childNodes[0];
+		td.appendChild(document.createTextNode(String(i)));
+		for (let j = 0; j < infos.length; ++j) {
+			td = itr.childNodes[j + 1];
+			td.classList.remove("gray");
+			let col = infos[j].column;
+			/** @type {string} */
+			let stringified = format[col](d[col]);
+			if (shouldGrayoutValue(stringified)) {
+				td.classList.add("gray");
+			}
+			let value = document.createTextNode(stringified);
+			td.appendChild(value);
+		}
+		console.log(itr);
+		this.#tbody.append(itr);
 	}
 }
 
@@ -136,8 +388,8 @@ class Histogram extends mc.MosaicClient {
 		 */
 		let process = (channel, entry) => {
 			if (isTransform(entry)) {
-				const enc = entry(this, channel);
-				for (const key in enc) {
+				let enc = entry(this, channel);
+				for (let key in enc) {
 					process(key, enc[key]);
 				}
 			} else if (isFieldObject(channel, entry)) {
@@ -156,6 +408,7 @@ class Histogram extends mc.MosaicClient {
 		this.#interval = new Interval1D(this, {
 			channel: "x",
 			selection: this.filterBy,
+			field: this.#source.column,
 		});
 	}
 
@@ -204,7 +457,8 @@ class Histogram extends mc.MosaicClient {
 	 * @returns {Channel}
 	 */
 	channelField(channel, { exact = false } = {}) {
-		const c = exact
+		assert(this._fieldInfo, "Field info not set");
+		let c = exact
 			? this.channel(channel)
 			: this.#channels.find((c) => c.channel.startsWith(channel));
 		assert(c, `Channel ${channel} not found`);
@@ -253,7 +507,7 @@ class Histogram extends mc.MosaicClient {
 
 	get plot() {
 		return {
-			el: this.#el,
+			node: () => this.#el,
 			/** @param {string} _name */
 			getAttribute(_name) {
 				return undefined;
@@ -263,103 +517,6 @@ class Histogram extends mc.MosaicClient {
 	}
 }
 
-export default () => {
-	/** @type {FetchRecordBatchReader} */
-	let createRecordBatchReader;
-	let coordinator = new mc.Coordinator();
-	/** @type {TableSummary} */
-	let summary;
-	return {
-		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
-		initialize({ model, experimental: { invoke } }) {
-			let connector = {
-				/** @param {{ type: "arrow", sql: string }} arg */
-				async query({ type, sql }) {
-					assert(
-						type === "arrow" || type === "exec",
-						"Only arrow queries are supported",
-					);
-					assert(typeof sql === "string", "SQL must be a string");
-					let [_, buffers] = await invoke("_query", { type, sql });
-					if (buffers.length === 0) {
-						return;
-					}
-					let table = arrow.tableFromIPC(buffers[0]);
-					return table;
-				},
-			};
-			coordinator.databaseConnector(connector);
-			summary = new TableSummary({
-				table: model.get("_table_name"),
-				columns: model.get("_columns"),
-			});
-			coordinator.connect(summary);
-			/**
-			 * @param {{ type: "arrow", sql: string }} arg
-			 * @returns {Promise<RecordBatchReader>}
-			 */
-			async function createRecordBatchReaderJupyter({ type, sql }) {
-				assert(type === "arrow", "Only arrow queries are supported");
-				let [done, [ipc]] = await invoke("_execute", { sql });
-				let first = true;
-				let table = arrow.tableFromIPC(ipc);
-				return {
-					schema: table.schema,
-					async next() {
-						if (first) {
-							first = false;
-							return { done, value: table };
-						}
-						[done, [ipc]] = await invoke("_next_batch", {});
-						table = arrow.tableFromIPC(ipc);
-						return { done, value: table };
-					},
-				};
-			}
-			createRecordBatchReader = createRecordBatchReaderJupyter;
-		},
-		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
-		async render({ model, el }) {
-			await summary.ready();
-
-			let $brush = mc.Selection.crossfilter();
-			// @ts-expect-error - missing types
-			window.coordinator = coordinator;
-			// @ts-expect-error - missing types
-			window.$brush = $brush;
-
-			let columns = summary
-				.info
-				.filter((entry) => entry.type === "number" || entry.type === "date")
-				.map(({ column, type }) => {
-					assert(
-						type === "number" || type === "date",
-						"Invalid type",
-					);
-					return {
-						name: column,
-						client: new Histogram({
-							table: summary.table,
-							column,
-							type,
-							filterBy: $brush,
-						}),
-					};
-				});
-
-			for (let column of columns) {
-				coordinator.connect(column.client);
-			}
-
-			let table = new ArrowDataTable(createRecordBatchReader, columns, {
-				tableName: model.get("_table_name"),
-			});
-			await table.render();
-			el.appendChild(table.node());
-		},
-	};
-};
-
 const TRUNCATE = /** @type {const} */ ({
 	whiteSpace: "nowrap",
 	overflow: "hidden",
@@ -367,6 +524,7 @@ const TRUNCATE = /** @type {const} */ ({
 });
 
 class TableRowReader {
+	#index = 0;
 	/** @param {RecordBatchReader} reader */
 	constructor(reader) {
 		this.inner = reader;
@@ -386,7 +544,7 @@ class TableRowReader {
 		this.iter = value[Symbol.iterator]();
 	}
 
-	/** @return {IteratorResult<{ kind: "batch"; readNextBatch: () => Promise<void> } | { kind: "row"; data: arrow.StructRowProxy }>} */
+	/** @return {IteratorResult<{ kind: "batch"; readNextBatch: () => Promise<void> } | { kind: "row"; data: arrow.StructRowProxy; index: number }>} */
 	next() {
 		if (!this.iter) {
 			return {
@@ -402,6 +560,7 @@ class TableRowReader {
 				value: {
 					kind: "row",
 					data: result.value,
+					index: this.#index++,
 				},
 			};
 		}
@@ -455,7 +614,7 @@ function thcol(field, minWidth, sortState, vis) {
 		</div>
 		${verticalResizeHandle}
 		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px", userSelect: "none" }}>${formatDataTypeName(field.type)}</span>
-		${vis?.client.plot.el}
+		${vis?.plot?.node()}
 	</th>`;
 
 	signals.effect(() => {
@@ -524,269 +683,6 @@ function thcol(field, minWidth, sortState, vis) {
 	});
 
 	return th;
-}
-
-// Faux HTMLElement that we don't need to add to `customElements`.
-// TODO: Switch to real HTMLElement when building for the browser.
-class _HTMLElement {
-	/** @type {HTMLElement} */
-	#root;
-	constructor() {
-		this.#root = document.createElement("div");
-		/** @type {ShadowRoot} */
-		this.shadowRoot = this.#root.attachShadow({ mode: "open" });
-	}
-	node() {
-		return this.#root;
-	}
-}
-
-/** @param {string} field */
-function asc(field) {
-	// doesn't sort nulls for asc
-	let expr = msql.desc(field);
-	expr._expr[0] = expr._expr[0].replace("DESC", "ASC");
-	return expr;
-}
-
-class ArrowDataTable extends _HTMLElement {
-	/** @type {FetchRecordBatchReader} */
-	#execute;
-	/** @type {Array<{ field: string; order: "asc" | "desc" }>}*/
-	#orderby;
-	/** @type {() => Promise<void>} */
-	#resetTable = async () => {};
-	/** @type {Array<ColumnSummaryVis>} */
-	#columns;
-	/** @type {{ height?: number, tableName: string }} */
-	#options;
-
-	/**
-	 * @param {FetchRecordBatchReader} execute
-	 * @param {Array<ColumnSummaryVis>} columns
-	 * @param {{ height?: number, tableName?: string }} options
-	 */
-	constructor(execute, columns, options = {}) {
-		super();
-		this.#execute = execute;
-		this.#orderby = [];
-		this.#columns = columns;
-		this.#options = { tableName: "df", ...options };
-		this.shadowRoot.appendChild(html`<style>${STYLES}</style>`);
-	}
-
-	async #createRowReader() {
-		let query = msql.Query
-			.from(this.#options.tableName)
-			.select("*");
-		if (this.#orderby.length > 0) {
-			query.orderby(
-				...this.#orderby.map((o) =>
-					o.order === "asc" ? asc(o.field) : msql.desc(o.field)
-				),
-			);
-		}
-		let sql = query.toString();
-		let recordBatchReader = await this.#execute({ type: "arrow", sql });
-		return new TableRowReader(recordBatchReader);
-	}
-
-	async render() {
-		let rowHeight = 22;
-		let rows = 11.5;
-		let tableLayout = "fixed";
-		let columnWidth = 125;
-		let headerHeight = "50px";
-		let maxHeight = `${(rows + 1) * rowHeight - 1}px`;
-
-		// if maxHeight is set, calculate the number of rows to display
-		if (this.#options.height) {
-			rows = Math.floor(this.#options.height / rowHeight);
-			maxHeight = `${this.#options.height}px`;
-		}
-
-		/** @type {HTMLDivElement} */
-		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
-
-		/** @type {number} */
-		let iterindex = 0;
-		/** @type {TableRowReader} */
-		let reader = await this.#createRowReader();
-		let cols = reader.schema.fields.map((field) => field.name);
-		let format = formatof(reader.schema);
-		let classes = classof(reader.schema);
-
-		let tbody = html`<tbody>`;
-		// @deno-fmt-ignore
-		let thead = html`<thead>
-			<tr style=${{ height: headerHeight }}>
-				<th></th>
-				${reader.schema.fields.map((field) => {
-					/** @type {signals.Signal<"unset" | "asc" | "desc">} */
-					let toggle = signals.signal("unset");
-					signals.effect(() => {
-						let orderby = this.#orderby.filter((o) => o.field !== field.name);
-						if (toggle.value !== "unset") {
-							orderby.unshift({ field: field.name, order: toggle.value });
-						}
-						this.#orderby = orderby;
-						this.#resetTable();
-					});
-					let vis = this.#columns.find((c) => c.name === field.name);
-					return thcol(field, columnWidth, toggle, vis);
-				})}
-				<th style=${{
-			width: "99%",
-			borderLeft: "none",
-			borderRight: "none",
-		}}></th>
-			</tr>
-		</thead>`;
-
-		let tr = html`<tr><td></td>${
-			cols.map((col) => html.fragment`<td class=${classes[col]}></td>`)
-		}
-			<td style=${{
-			width: "99%",
-			borderLeft: "none",
-			borderRight: "none",
-		}}></td>
-		</tr>`;
-
-		// @deno-fmt-ignore
-		root.appendChild(
-			html.fragment`<table style=${{ tableLayout }}>${thead}${tbody}</table>`
-		);
-
-		this.#resetTable = async () => {
-			reader = await this.#createRowReader();
-			iterindex = 0;
-			tbody.innerHTML = "";
-			root.scrollTop = 0;
-			appendRows(rows * 2);
-		};
-
-		/**
-		 * Number of rows to append
-		 * @param {number} nrows
-		 */
-		async function appendRows(nrows) {
-			while (nrows >= 0) {
-				let result = reader.next();
-				if (result.done) {
-					// we've exhausted all rows
-					break;
-				}
-				if (result.value.kind === "row") {
-					appendRow(result.value.data, iterindex++);
-					nrows--;
-					continue;
-				}
-				if (result.value.kind === "batch") {
-					await result.value.readNextBatch();
-					continue;
-				}
-			}
-		}
-
-		/**
-		 * @param {arrow.StructRowProxy} d
-		 * @param {number} i
-		 */
-		function appendRow(d, i) {
-			const itr = tr.cloneNode(true);
-			let td = itr.childNodes[0];
-			td.appendChild(document.createTextNode(String(i)));
-			for (let j = 0; j < cols.length; ++j) {
-				td = itr.childNodes[j + 1];
-				td.classList.remove("gray");
-				let col = cols[j];
-				/** @type {string} */
-				let stringified = format[col](d[col]);
-				if (shouldGrayoutValue(stringified)) {
-					td.classList.add("gray");
-				}
-				let value = document.createTextNode(stringified);
-				td.appendChild(value);
-			}
-			tbody.append(itr);
-		}
-
-		// scroll behavior
-		{
-			root.addEventListener("scroll", async () => {
-				let isAtBottom =
-					root.scrollHeight - root.scrollTop < rows * rowHeight * 1.5;
-				if (isAtBottom) {
-					await appendRows(rows);
-				}
-			});
-		}
-
-		// highlight on hover
-		{
-			root.addEventListener("mouseover", (event) => {
-				if (
-					isTableCellElement(event.target) &&
-					isTableRowElement(event.target.parentNode)
-				) {
-					const cell = event.target;
-					const row = event.target.parentNode;
-					highlight(cell, row);
-				}
-			});
-			root.addEventListener("mouseout", (event) => {
-				if (
-					isTableCellElement(event.target) &&
-					isTableRowElement(event.target.parentNode)
-				) {
-					const cell = event.target;
-					const row = event.target.parentNode;
-					removeHighlight(cell, row);
-				}
-			});
-		}
-
-		appendRows(rows * 2);
-		this.shadowRoot?.appendChild(root);
-	}
-}
-
-/**
- * @param {HTMLTableCellElement} cell
- * @param {HTMLTableRowElement} row
- */
-function highlight(cell, row) {
-	if (row.firstChild !== cell && cell !== row.lastElementChild) {
-		cell.style.border = "1px solid var(--moon-gray)";
-	}
-	row.style.backgroundColor = "var(--light-silver)";
-}
-
-/**
- * @param {HTMLTableCellElement} cell
- * @param {HTMLTableRowElement} row
- */
-function removeHighlight(cell, row) {
-	cell.style.removeProperty("border");
-	row.style.removeProperty("background-color");
-}
-
-/**
- * @param {unknown} node
- * @returns {node is HTMLTableDataCellElement}
- */
-function isTableCellElement(node) {
-	// @ts-expect-error - tagName is not defined on unknown
-	return node?.tagName === "TD";
-}
-
-/**
- * @param {unknown} node
- * @returns {node is HTMLTableRowElement}
- */
-function isTableRowElement(node) {
-	return node instanceof HTMLTableRowElement;
 }
 
 const STYLES = /*css*/ `\
@@ -919,6 +815,51 @@ tr:first-child td {
 	user-select: none;
 }
 `;
+
+/** @param {string} field */
+function asc(field) {
+	// doesn't sort nulls for asc
+	let expr = msql.desc(field);
+	expr._expr[0] = expr._expr[0].replace("DESC", "ASC");
+	return expr;
+}
+
+/**
+ * @param {HTMLTableCellElement} cell
+ * @param {HTMLTableRowElement} row
+ */
+function highlight(cell, row) {
+	if (row.firstChild !== cell && cell !== row.lastElementChild) {
+		cell.style.border = "1px solid var(--moon-gray)";
+	}
+	row.style.backgroundColor = "var(--light-silver)";
+}
+
+/**
+ * @param {HTMLTableCellElement} cell
+ * @param {HTMLTableRowElement} row
+ */
+function removeHighlight(cell, row) {
+	cell.style.removeProperty("border");
+	row.style.removeProperty("background-color");
+}
+
+/**
+ * @param {unknown} node
+ * @returns {node is HTMLTableDataCellElement}
+ */
+function isTableCellElement(node) {
+	// @ts-expect-error - tagName is not defined on unknown
+	return node?.tagName === "TD";
+}
+
+/**
+ * @param {unknown} node
+ * @returns {node is HTMLTableRowElement}
+ */
+function isTableRowElement(node) {
+	return node instanceof HTMLTableRowElement;
+}
 
 /**
  * @param {unknown} condition
@@ -1222,7 +1163,7 @@ function channelScale(mark, channel) {
 
 	let scaleType = plot.getAttribute(`${channel}Scale`);
 	if (!scaleType) {
-		const { type } = mark.channelField(channel);
+		let { type } = mark.channelField(channel);
 		scaleType = type === "date" ? "time" : "linear";
 	}
 
@@ -1364,7 +1305,7 @@ function binField(mark, channel, column, options) {
 			return { column, stats: ["min", "max"] };
 		},
 		toString() {
-			const { type, min, max } = mark.channelField(channel);
+			const { type, min, max, field } = mark.channelField(channel);
 			assert(
 				type !== undefined && min !== undefined && max !== undefined,
 				"Expected channel to have type, min, and max",
@@ -1640,11 +1581,10 @@ let formatMap = {
  * @param {Array<Bin>} data
  * @param {HistogramOptions} [options]
  */
-function hist(data, options = {}) {
-	let bins = [...data];
-	bins.sort((a, b) => a.x0 - b.x0);
-
-	let {
+function hist(
+	data,
+	{
+		type,
 		width = 125,
 		height = 40,
 		marginTop = 0,
@@ -1654,15 +1594,17 @@ function hist(data, options = {}) {
 		nullCount = 0,
 		fillColor = "#fdba74",
 		nullFillColor = "#c2410c",
-	} = options;
-
+	} = {},
+) {
+	let bins = [...data];
+	bins.sort((a, b) => a.x0 - b.x0);
 	let avgBinWidth = nullCount === 0 ? 0 : width / (bins.length + 1);
 
 	let x, xAxis;
 	let midFirstBin = (bins[0].x0 + bins[0].x1) / 2;
 	let midLastBin = (bins[bins.length - 1].x0 + bins[bins.length - 1].x1) / 2;
 
-	if (options.type === "date") {
+	if (type === "date") {
 		let interval = timeInterval(
 			bins[0].x0,
 			bins[bins.length - 1].x1,
@@ -1790,7 +1732,10 @@ function hist(data, options = {}) {
 			[marginLeft + avgBinWidth, marginTop],
 			[width - marginRight, height - marginBottom],
 		],
-		update(data) {},
+		/** @param {Array<Bin>} _bins */
+		update(_bins) {
+			// TODO:: There is a bug and right now _bins are always empty...
+		},
 	};
 }
 
@@ -1800,7 +1745,7 @@ class Interval1D {
 	 * @param {{
 	 *   channel: string;
 	 *   selection: mc.Selection,
-	 *   field?: string;
+	 *   field: string;
 	 *   pixelSize?: number;
 	 *   peers?: boolean;
 	 * }} options
@@ -1808,14 +1753,14 @@ class Interval1D {
 	constructor(client, {
 		channel,
 		selection,
-		field = undefined,
+		field,
 		pixelSize = 1,
 	}) {
 		this.client = client;
 		this.channel = channel;
 		this.pixelSize = pixelSize || 1;
 		this.selection = selection;
-		this.field = field || client.channelField(channel).field;
+		this.field = field;
 		assert(channel === "x", "Expected channel to be x");
 		this.brush = brushX();
 		this.brush.on("brush end", ({ selection }) => {
@@ -1886,10 +1831,10 @@ class Interval1D {
 /**
  * @param {number} value
  * @param {import("npm:@types/d3-scale").ScaleLinear<number, number>} scale
- * @param {number} [pixelSize]
+ * @param {number} pixelSize
  * @returns {number} pixelSize
  */
-function invert(value, scale, pixelSize = 1) {
+function invert(value, scale, pixelSize) {
 	return scale.invert(pixelSize * Math.floor(value / pixelSize));
 }
 
@@ -1923,6 +1868,7 @@ const closeTo = (() => {
 	};
 })();
 
+/** @typedef {ScaleBase & import("npm:@types/d3-scale").ScaleLinear<number, number>} Scale */
 /** @typedef {[number, number]| [Date, Date]} Extent */
 /**
  * @typedef ScaleBase
@@ -1933,5 +1879,3 @@ const closeTo = (() => {
  * @property {number} [constant]
  * @property {number} [exponent]
  */
-
-/** @typedef {ScaleBase & import("npm:@types/d3-scale").ScaleLinear<number, number>} Scale */
