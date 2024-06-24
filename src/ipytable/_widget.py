@@ -8,7 +8,6 @@ import typing
 import anywidget
 import anywidget.experimental
 import duckdb
-import pyarrow as pa
 import traitlets
 
 DataFrameObject = typing.Any
@@ -26,6 +25,7 @@ if typing.TYPE_CHECKING:
 # https://github.com/vega/altair/blob/18a2c3c237014591d172284560546a2f0ac1a883/altair/utils/data.py#L343
 def arrow_table_from_dataframe_protocol(dflike: DataFrameObject) -> pa.lib.Table:
     """Convert a DataFrame-like object to a pyarrow Table."""
+    import pyarrow as pa
     import pyarrow.interchange as pi
 
     # First check if the dataframe object has a method to convert to arrow.
@@ -65,6 +65,8 @@ def table_to_ipc(table: pa.lib.Table) -> memoryview:
 
 
 def record_batch_to_ipc(record_batch: pa.lib.RecordBatch) -> memoryview:
+    import pyarrow as pa
+
     table = pa.Table.from_batches([record_batch], schema=record_batch.schema)
     return table_to_ipc(table)
 
@@ -114,11 +116,8 @@ class Widget(anywidget.AnyWidget):
         try:
             if command == "arrow":
                 result = self._conn.query(sql).arrow()
-                sink = pa.BufferOutputStream()
-                with pa.ipc.new_stream(sink, result.schema) as writer:
-                    writer.write(result)
-                buf = sink.getvalue()
-                self.send({"type": "arrow", "uuid": uuid}, buffers=[buf.to_pybytes()])
+                buf = table_to_ipc(result)
+                self.send({"type": "arrow", "uuid": uuid}, buffers=[buf])
             elif command == "exec":
                 self._conn.execute(sql)
                 self.send({"type": "exec", "uuid": uuid})

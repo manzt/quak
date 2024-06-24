@@ -8,6 +8,7 @@ import * as uuid from "https://esm.sh/@lukeed/uuid@2.0.1";
 // Ugh no types for these...
 import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.10.0/+esm";
 import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.10.0/+esm";
+import * as mplot from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-plot@0.10.0/+esm";
 
 /** @typedef {{ _table_name: string, _columns: Array<string>, temp_indexes: boolean }} Model */
 /** @typedef {(arg: { type: "exec" | "arrow", sql: msql.Query | string }) => Promise<void | arrow.Table>} QueryFn */
@@ -42,7 +43,7 @@ import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.10.0/+e
  * @property {number} [value] // orderby
  */
 /** @typedef {ScaleBase & import("npm:@types/d3-scale").ScaleLinear<number, number>} Scale */
-/** @typedef {[number, number]| [Date, Date]} Extent */
+/** @typedef {[number, number] | [Date, Date]} Extent */
 /**
  * @typedef ScaleBase
  * @property {ScaleType} type
@@ -243,7 +244,7 @@ class DataTable extends mc.MosaicClient {
 	}
 
 	/** @param {Array<Info>} infos */
-	async fieldInfo(infos) {
+	async #onFieldInfo(infos) {
 		let reader = await this.#createRowReader();
 		let classes = classof(reader.schema);
 		let format = formatof(reader.schema);
@@ -277,6 +278,7 @@ class DataTable extends mc.MosaicClient {
 					table: this.#source.table,
 					column: field.name,
 					type: info.type,
+					// filterBy: $brush,
 				});
 				this.coordinator.connect(vis);
 			}
@@ -338,6 +340,13 @@ class DataTable extends mc.MosaicClient {
 		this.#refreshTableBody();
 	}
 
+	/** @param {Array<Info>} infos */
+	fieldInfo(infos) {
+		// Mosaic expects a synchronous return, so we wrap the handler in an async function
+		this.#onFieldInfo(infos);
+		return this;
+	}
+
 	/**
 	 * Number of rows to append
 	 * @param {number} nrows
@@ -377,11 +386,12 @@ class DataTable extends mc.MosaicClient {
 	 * @param {Record<string, (value: any) => string>} format
 	 */
 	#appendRow(d, i, infos, format) {
-		const itr = this.#dataRow?.cloneNode(true);
-		let td = itr.childNodes[0];
+		let itr = this.#dataRow?.cloneNode(true);
+		assert(itr, "Must have a data row");
+		let td = /** @type {HTMLTableCellElement} */ (itr?.childNodes[0]);
 		td.appendChild(document.createTextNode(String(i)));
 		for (let j = 0; j < infos.length; ++j) {
-			td = itr.childNodes[j + 1];
+			td = /** @type {HTMLTableCellElement} */ (itr.childNodes[j + 1]);
 			td.classList.remove("gray");
 			let col = infos[j].column;
 			/** @type {string} */
@@ -428,7 +438,7 @@ class Histogram extends mc.MosaicClient {
 	#channels = [];
 	/** @type {Set<unknown>} */
 	#markSet = new Set();
-	/** @type {Interval1D | undefined} */
+	/** @type {mplot.Interval1D | undefined} */
 	#interval = undefined;
 	/** @type {boolean} */
 	#initialized = false;
@@ -456,17 +466,18 @@ class Histogram extends mc.MosaicClient {
 			}
 		};
 		let encodings = {
-			x: bin(source.column),
+			x: mplot.bin(source.column),
 			y: msql.count(),
 		};
 		for (let [channel, entry] of Object.entries(encodings)) {
 			process(channel, entry);
 		}
 		if (source.filterBy) {
-			this.#interval = new Interval1D(this, {
+			this.#interval = new mplot.Interval1D(this, {
 				channel: "x",
 				selection: this.filterBy,
 				field: this.#source.column,
+				brush: undefined,
 			});
 		}
 	}
@@ -556,8 +567,8 @@ class Histogram extends mc.MosaicClient {
 				bins.splice(nullBinIndex, 1);
 			}
 			this.svg = hist(bins, { nullCount, type: this.#source.type });
-			this.#interval?.init(this.svg);
-			this.#el.appendChild(this.svg.node());
+			this.#interval?.init(this.svg, null);
+			this.#el.appendChild(this.svg);
 			this.#initialized = true;
 		} else {
 			this.svg?.update(bins);
@@ -1226,74 +1237,6 @@ function shouldGrayoutValue(value) {
 
 /// bin stuff
 
-const Transform = Symbol();
-
-/**
- * @param {Mark} mark
- * @param {string} channel
- */
-function channelScale(mark, channel) {
-	const { plot } = mark;
-
-	let scaleType = plot.getAttribute(`${channel}Scale`);
-	if (!scaleType) {
-		let { type } = mark.channelField(channel);
-		scaleType = type === "date" ? "time" : "linear";
-	}
-
-	/** @type {{ type: ScaleType, base?: number, exponent?: number, constant?: number }} */
-	const options = { type: scaleType };
-	switch (scaleType) {
-		case "log":
-			options.base = plot.getAttribute(`${channel}Base`) ?? 10;
-			break;
-		case "pow":
-			options.exponent = plot.getAttribute(`${channel}Exponent`) ?? 1;
-			break;
-		case "symlog":
-			options.constant = plot.getAttribute(`${channel}Constant`) ?? 1;
-			break;
-	}
-	return msql.scaleTransform(options);
-}
-
-// @deno-fmt-ignore
-const EXTENT = new Set([ "rectY-x", "rectX-y", "rect-x", "rect-y", "ruleY-x", "ruleX-y" ]);
-
-/**
- * @param {Mark} mark
- * @param {string} channel
- */
-function hasExtent(mark, channel) {
-	return EXTENT.has(`${mark.type}-${channel}`);
-}
-
-/**
- * @param {string} field
- * @param {{}} [options]
- * @returns {(mark: Mark, channel: string) => Record<string, Field>}
- */
-function bin(field, options = {}) {
-	/**
-	 * @param {Mark} mark
-	 * @param {string} channel
-	 */
-	const fn = (mark, channel) => {
-		if (hasExtent(mark, channel)) {
-			// @deno-fmt-ignore
-			return {
-				[`${channel}1`]: binField(mark, channel, field, options),
-				[`${channel}2`]: binField(mark, channel, field, { ...options, offset: 1 }),
-			};
-		}
-		return {
-			[channel]: binField(mark, channel, field, options),
-		};
-	};
-	fn[Transform] = true;
-	return fn;
-}
-
 const YEAR = "year";
 const MONTH = "month";
 const DAY = "day";
@@ -1360,74 +1303,6 @@ function timeInterval(min, max, steps) {
 }
 
 /**
- * @param {Mark} mark
- * @param {string} channel
- * @param {string} column
- * @param {{ interval?: "number" | "date", steps?: number, offset?: number, step?: number }} options
- */
-function binField(mark, channel, column, options) {
-	return {
-		column,
-		label: column,
-		get columns() {
-			return [column];
-		},
-		get basis() {
-			return column;
-		},
-		get stats() {
-			return { column, stats: ["min", "max"] };
-		},
-		toString() {
-			const { type, min, max, field } = mark.channelField(channel);
-			assert(
-				type !== undefined && min !== undefined && max !== undefined,
-				"Expected channel to have type, min, and max",
-			);
-			const { interval: i, steps, offset = 0 } = options;
-			const interval = i ??
-				(type === "date" || hasTimeScale(mark, channel) ? "date" : "number");
-
-			if (interval === "number") {
-				// perform number binning
-				const { apply, sqlApply, sqlInvert } = channelScale(
-					mark,
-					channel,
-				);
-				const b = bins(apply(min), apply(max), options);
-				const col = sqlApply(column);
-				const base = b.min === 0 ? col : `(${col} - ${b.min})`;
-				assert(
-					typeof b.steps === "number",
-					"Expected steps to be a number",
-				);
-				const alpha = `${(b.max - b.min) / b.steps}::DOUBLE`;
-				const off = offset ? `${offset} + ` : "";
-				const expr = `${b.min} + ${alpha} * (${off}FLOOR(${base} / ${alpha}))`;
-				return `${sqlInvert(expr)}`;
-			} else {
-				// perform date/time binning
-				const { interval: unit, step = 1 } = interval === "date"
-					? timeInterval(min, max, steps || 40)
-					: options;
-				const off = offset ? ` + INTERVAL ${offset * step} ${unit}` : "";
-				assert(unit !== undefined, "Expected unit to be defined");
-				return `(${dateBin(column, unit, step)}${off})`;
-			}
-		},
-	};
-}
-
-/**
- * @param {Mark} mark
- * @param {string} channel
- */
-function hasTimeScale(mark, channel) {
-	const scale = mark.plot.getAttribute(`${channel}Scale`);
-	return scale === "utc" || scale === "time";
-}
-
-/**
  * @param {number} span
  * @param {number} steps
  * @param {number} [minstep]
@@ -1453,44 +1328,6 @@ function binStep(span, steps, minstep = 0, logb = Math.LN10) {
 	}
 
 	return step;
-}
-
-/**
- * @param {number} min
- * @param {number} max
- * @param {{ steps?: number, minstep?: number, nice?: boolean, step?: number }} options
- */
-function bins(min, max, options) {
-	let { step, steps, minstep = 0, nice = true } = options;
-
-	if (nice !== false) {
-		// use span to determine step size
-		const span = max - min;
-		const logb = Math.LN10;
-		step = step || binStep(span, steps || 25, minstep, logb);
-
-		// adjust min/max relative to step
-		let v = Math.log(step);
-		const precision = v >= 0 ? 0 : ~~(-v / logb) + 1;
-		const eps = Math.pow(10, -precision - 1);
-		v = Math.floor(min / step + eps) * step;
-		min = min < v ? v - step : v;
-		max = Math.ceil(max / step) * step;
-		steps = Math.round((max - min) / step);
-	}
-
-	return { min, max, steps };
-}
-
-/**
- * @param {string} expr
- * @param {string} interval
- * @param {number} [steps]
- */
-function dateBin(expr, interval, steps = 1) {
-	const i = `INTERVAL ${steps} ${interval}`;
-	const d = msql.asColumn(expr);
-	return msql.sql`TIME_BUCKET(${i}, ${d})`.annotate({ label: interval });
 }
 
 /**
@@ -1527,24 +1364,7 @@ function isFieldObject(channel, field) {
  * @returns {x is (mark: Mark, channel: string) => Record<string, Field>}
  */
 function isTransform(x) {
-	// @ts-expect-error - TS doesn't support symbol types
-	return typeof x === "function" && x[Transform] === true;
-}
-
-/**
- * TODO: Replace with Promise.withResolvers() when available
- *
- * @template T
- * @returns {{ promise: Promise<T>, resolve: (value: T) => void, reject: (reason: any) => void }}
- */
-function defer() {
-	let resolve, reject;
-	let promise = new Promise((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	// @ts-expect-error - resolve and reject are assigned
-	return { resolve, reject, promise };
+	return typeof x === "function";
 }
 
 /**
@@ -1597,19 +1417,11 @@ let scaleTime = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
 let create = /** @type {import("npm:@types/d3-selection").create} */ (d3
 	// @ts-expect-error - d3 types are incorrect
 	.create);
-let select = /** @type {import("npm:@types/d3-selection").select} */ (d3
-	// @ts-expect-error - d3 types are incorrect
-	.select);
-let brushX =
-	// @ts-expect-error - d3 types are incorrect
-	/** @type {import("npm:@types/d3-brush").brushX} */ (d3.brushX);
 let axisBottom =
 	// @ts-expect-error - d3 types are incorrect
 	/** @type {import("npm:@types/d3-axis").axisBottom} */ (d3.axisBottom);
 let format = // @ts-expect-error - d3 types are incorrect
 	/** @type {import("npm:@types/d3-format").format} */ (d3.format);
-let ascending = // @ts-expect-error - d3 types are incorrect
-	/** @type {import("npm:@types/d3-array").ascending} */ (d3.ascending);
 
 /**
  * @typedef Bin
@@ -1649,6 +1461,7 @@ let formatMap = {
 /**
  * @param {Array<Bin>} data
  * @param {HistogramOptions} [options]
+ * @returns {SVGSVGElement & { scale: (type: string) => Scale }}
  */
 function hist(
 	data,
@@ -1771,168 +1584,29 @@ function hist(
 	// Apply styles for all axis ticks
 	svg.selectAll(".tick")
 		.attr("font-family", "var(--sans-serif)")
-		.attr("font-weight", "normal")
-		.attr("style", "user-select: none;");
+		.attr("font-weight", "normal");
 
+	let scales = {
+		x: Object.assign(x, {
+			type: "linear",
+			domain: x.domain(),
+			range: x.range(),
+		}),
+		y: Object.assign(y, {
+			type: "linear",
+			domain: y.domain(),
+			range: y.range(),
+		}),
+	};
 	let node = svg.node();
-	Object.defineProperties(x, {
-		type: { value: "linear" },
-		domain: { value: x.domain() },
-		range: { value: x.range() },
-	});
-	Object.defineProperties(y, {
-		type: { value: "linear" },
-		domain: { value: y.domain() },
-		range: { value: y.range() },
-	});
-	assert(node, "Expected node to be defined");
-	return {
-		node: () => node,
-		/**
-		 * @param {string} type
-		 * @returns {Scale}
-		 */
-		scale: (type) => {
-			assert(type === "x" || type === "y", "Expected type to be x or y");
-			// @ts-expect-error - Types are wack
-			return type === "x" ? x : y;
+	assert(node, "Infallable");
+	return Object.assign(node, {
+		/** @param {string} type */
+		scale(type) {
+			// @ts-expect-error - scales is not defined
+			let scale = scales[type];
+			assert(scale, "Invalid scale type");
+			return scale;
 		},
-		brushExtent: () => [
-			[marginLeft + avgBinWidth, marginTop],
-			[width - marginRight, height - marginBottom],
-		],
-		/** @param {Array<Bin>} _bins */
-		update(_bins) {
-			// TODO:: There is a bug and right now _bins are always empty...
-		},
-	};
+	});
 }
-
-class Interval1D {
-	/**
-	 * @param {Histogram} client
-	 * @param {{
-	 *   channel: string;
-	 *   selection: mc.Selection,
-	 *   field: string;
-	 *   pixelSize?: number;
-	 *   peers?: boolean;
-	 * }} options
-	 */
-	constructor(client, {
-		channel,
-		selection,
-		field,
-		pixelSize = 1,
-	}) {
-		this.client = client;
-		this.channel = channel;
-		this.pixelSize = pixelSize || 1;
-		this.selection = selection;
-		this.field = field;
-		assert(channel === "x", "Expected channel to be x");
-		this.brush = brushX();
-		this.brush.on("brush end", ({ selection }) => {
-			this.publish(selection);
-		});
-		this.initialized = false;
-	}
-
-	reset() {
-		this.value = undefined;
-		if (this.g) this.brush.clear(this.g);
-	}
-
-	activate() {
-		this.selection.activate(this.clause(this.value || [0, 1]));
-	}
-
-	/** @param {number[] | undefined} extent */
-	publish(extent) {
-		let range = undefined;
-		if (extent && this.scale) {
-			let scale = this.scale;
-			range = extent
-				.map((v) => invert(v, scale, this.pixelSize))
-				.sort((a, b) => a - b);
-		}
-		if (!closeTo(range, this.value)) {
-			this.value = range;
-			this.g?.call(this.brush.move, extent);
-			this.selection.update(this.clause(range));
-		}
-	}
-
-	/** @param {number[] | undefined} value */
-	clause(value) {
-		// @ts-expect-error - Types are wack
-		let clause = mc.interval(this.field, value, {
-			source: this,
-			clients: new Set().add(this.client),
-			scale: this.scale,
-			pixelSize: this.pixelSize,
-		});
-		return clause;
-	}
-
-	/**
-	 * @param {ReturnType<typeof hist>} svg
-	 */
-	init(svg) {
-		let scale = this.scale = svg.scale(this.channel);
-		// This is maybe undefined
-		this.brush.extent(svg.brushExtent());
-		let range = this.value?.map((d) => scale(d)).sort(ascending);
-
-		this.g = select(svg.node())
-			.append("g")
-			.each(patchScreenCTM)
-			.call(this.brush)
-			.call(this.brush.move, range || [0, 1]);
-
-		svg.node().addEventListener("pointerenter", (evt) => {
-			if (!evt.buttons) this.activate();
-		});
-		this.initialized = true;
-	}
-}
-
-/**
- * @param {number} value
- * @param {import("npm:@types/d3-scale").ScaleLinear<number, number>} scale
- * @param {number} pixelSize
- * @returns {number} pixelSize
- */
-function invert(value, scale, pixelSize) {
-	return scale.invert(pixelSize * Math.floor(value / pixelSize));
-}
-
-/**
- * Patch the getScreenCTM method to memoize the last non-null
- * result seen. This will let the method continue to function
- * even after the node is removed from the DOM.
- */
-function patchScreenCTM() {
-	/** @type {SVGGraphicsElement} */
-	// @ts-ignore - this is a SVGGraphicsElement
-	// deno-lint-ignore no-this-alias
-	let node = this;
-	const getScreenCTM = node.getScreenCTM;
-	/** @type {DOMMatrix | null} */
-	let memo;
-	node.getScreenCTM = () => {
-		return node.isConnected ? (memo = getScreenCTM.call(node)) : memo;
-	};
-}
-
-const closeTo = (() => {
-	const EPS = 1e-12;
-	/** @type {(a: number[] | undefined, b: number[] | undefined) => boolean} */
-	return (a, b) => {
-		return a === b || (
-			a && b &&
-			Math.abs(a[0] - b[0]) < EPS &&
-			Math.abs(a[1] - b[1]) < EPS
-		) || false;
-	};
-})();
