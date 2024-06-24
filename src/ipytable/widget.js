@@ -9,8 +9,10 @@ import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
 // Ugh no types for these...
 import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.9.0/+esm";
 import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+esm";
+// @deno-types="npm:@lukeed/uuid@2.0.1"
+import * as uuid from "https://esm.sh/@lukeed/uuid@2.0.1";
 
-/** @typedef {{ _table_name: string, _columns: Array<string> }} Model */
+/** @typedef {{ _table_name: string, _columns: Array<string>, temp_indexes: boolean }} Model */
 /** @typedef {(arg: { type: "exec" | "arrow", sql: msql.Query | string }) => Promise<void | arrow.Table>} QueryFn */
 /** @typedef {{ query: QueryFn }} Coordinator */
 /**
@@ -66,18 +68,79 @@ export default () => {
 	let coordinator = new mc.Coordinator();
 	return {
 		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
-		initialize({ experimental: { invoke } }) {
-			coordinator.databaseConnector({
-				/** @type {QueryFn} */
-				async query({ type, sql }) {
-					let [_, buffers] = await invoke("_query", { type, sql });
-					if (buffers.length === 0) {
-						return;
+		initialize({ model }) {
+			// @ts-expect-error - ok to have no args
+			let logger = coordinator.logger();
+
+			/** @type Map<string, {query: Record<any, unknown>, startTime: number, resolve: (value: any) => void, reject: (reason?: any) => void}> */
+			let openQueries = new Map();
+
+			/**
+			 * @param {Record<any, unknown>} query the query to send
+			 * @param {(value: any) => void} resolve the promise resolve callback
+			 * @param {(reason?: any) => void} reject the promise reject callback
+			 */
+			function send(query, resolve, reject) {
+				let id = uuid.v4();
+				openQueries.set(id, {
+					query,
+					startTime: performance.now(),
+					resolve,
+					reject,
+				});
+				model.send({ ...query, uuid: id });
+			}
+
+			model.on("msg:custom", (msg, buffers) => {
+				console.log(msg, buffers);
+				logger.group(`query ${msg.uuid}`);
+				logger.log("received message", msg, buffers);
+				let query = openQueries.get(msg.uuid);
+				openQueries.delete(msg.uuid);
+				assert(query, `No query found for ${msg.uuid}`);
+				logger.log(
+					query.query.sql,
+					(performance.now() - query.startTime).toFixed(1),
+				);
+				if (msg.error) {
+					query.reject(msg.error);
+					logger.error(msg.error);
+					return;
+				} else {
+					switch (msg.type) {
+						case "arrow": {
+							let table = arrow.tableFromIPC(buffers[0].buffer);
+							logger.log("table", table);
+							query.resolve(table);
+							break;
+						}
+						case "json": {
+							logger.log("json", msg.result);
+							query.resolve(msg.result);
+							break;
+						}
+						default: {
+							query.resolve({});
+							break;
+						}
 					}
-					let table = arrow.tableFromIPC(buffers[0]);
-					return table;
-				},
+				}
+				logger.groupEnd("query");
 			});
+
+			let connector = {
+				/** @type {QueryFn} */
+				query(query) {
+					console.log(query);
+					return new Promise((resolve, reject) => send(query, resolve, reject));
+				},
+			};
+
+			coordinator.databaseConnector(connector);
+
+			return () => {
+				coordinator.clear();
+			};
 		},
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
 		render({ model, el }) {
