@@ -1,16 +1,13 @@
-// @deno-types="npm:htl@0.3.1"
 import { html } from "https://esm.sh/htl@0.3.1";
 // @deno-types="npm:apache-arrow@16.1.0"
 import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
-// @deno-types="npm:@js-temporal/polyfill@0.4.4"
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
-// @deno-types="npm:@preact/signals-core@1.6.1"
 import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
-// Ugh no types for these...
-import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.9.0/+esm";
-import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+esm";
-// @deno-types="npm:@lukeed/uuid@2.0.1"
 import * as uuid from "https://esm.sh/@lukeed/uuid@2.0.1";
+
+// Ugh no types for these...
+import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.10.0/+esm";
+import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.10.0/+esm";
 
 /** @typedef {{ _table_name: string, _columns: Array<string>, temp_indexes: boolean }} Model */
 /** @typedef {(arg: { type: "exec" | "arrow", sql: msql.Query | string }) => Promise<void | arrow.Table>} QueryFn */
@@ -280,7 +277,6 @@ class DataTable extends mc.MosaicClient {
 					table: this.#source.table,
 					column: field.name,
 					type: info.type,
-					filterBy: $brush,
 				});
 				this.coordinator.connect(vis);
 			}
@@ -413,6 +409,14 @@ function getNextOrderby(current, field, state) {
 	return next;
 }
 
+/**
+ * @typedef HistogramClientOptions
+ * @property {string} table
+ * @property {string} column
+ * @property {"number" | "date"} type
+ * @property {mc.Selection} [filterBy]
+ */
+
 /** @implements {Mark} */
 class Histogram extends mc.MosaicClient {
 	type = "rectY";
@@ -424,8 +428,10 @@ class Histogram extends mc.MosaicClient {
 	#channels = [];
 	/** @type {Set<unknown>} */
 	#markSet = new Set();
-	/** @type {Interval1D} */
-	#interval;
+	/** @type {Interval1D | undefined} */
+	#interval = undefined;
+	/** @type {boolean} */
+	#initialized = false;
 
 	/**
 	 * @param {{ table: string, column: string, type: "number" | "date", filterBy?: mc.Selection }} source
@@ -456,11 +462,13 @@ class Histogram extends mc.MosaicClient {
 		for (let [channel, entry] of Object.entries(encodings)) {
 			process(channel, entry);
 		}
-		this.#interval = new Interval1D(this, {
-			channel: "x",
-			selection: this.filterBy,
-			field: this.#source.column,
-		});
+		if (source.filterBy) {
+			this.#interval = new Interval1D(this, {
+				channel: "x",
+				selection: this.filterBy,
+				field: this.#source.column,
+			});
+		}
 	}
 
 	/** @returns {Array<{ table: string, column: string, stats: Array<string> }>} */
@@ -539,7 +547,7 @@ class Histogram extends mc.MosaicClient {
 			x1: d.x2,
 			length: d.y,
 		}));
-		if (!this.#interval.initialized) {
+		if (!this.#initialized) {
 			// TODO: Handle nulls
 			let nullCount = 0;
 			let nullBinIndex = bins.findIndex((b) => b.x0 == null);
@@ -548,8 +556,9 @@ class Histogram extends mc.MosaicClient {
 				bins.splice(nullBinIndex, 1);
 			}
 			this.svg = hist(bins, { nullCount, type: this.#source.type });
-			this.#interval.init(this.svg);
+			this.#interval?.init(this.svg);
 			this.#el.appendChild(this.svg.node());
+			this.#initialized = true;
 		} else {
 			this.svg?.update(bins);
 		}

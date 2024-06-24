@@ -18,6 +18,9 @@ logger.addHandler(logging.NullHandler())
 
 SLOW_QUERY_THRESHOLD = 5000
 
+if typing.TYPE_CHECKING:
+    import pyarrow as pa
+
 
 # Copied from Altair
 # https://github.com/vega/altair/blob/18a2c3c237014591d172284560546a2f0ac1a883/altair/utils/data.py#L343
@@ -40,6 +43,14 @@ def arrow_table_from_dataframe_protocol(dflike: DataFrameObject) -> pa.lib.Table
                 return result
 
     return pi.from_dataframe(dflike)  # type: ignore[no-any-return]
+
+
+def arrow_table_from_ipc(data: bytes | memoryview):
+    import io
+
+    import pyarrow.feather as feather
+
+    return feather.read_table(io.BytesIO(data))
 
 
 def table_to_ipc(table: pa.lib.Table) -> memoryview:
@@ -82,24 +93,16 @@ class Widget(anywidget.AnyWidget):
             conn = data
         else:
             conn = duckdb.connect(":memory:")
-            conn.register(table, arrow_table_from_dataframe_protocol(data))
+            if isinstance(data, (bytes, memoryview)):
+                arrow_table = arrow_table_from_ipc(data)
+            else:
+                arrow_table = arrow_table_from_dataframe_protocol(data)
+            conn.register(table, arrow_table)
         self._conn = conn
         super().__init__(
             _table_name=table, _columns=get_columns(conn, table), temp_indexes=True
         )
         self.on_msg(self._handle_custom_msg)
-
-    @anywidget.experimental.command
-    def _query(self, msg: dict, buffers: list[bytes]):
-        sql = msg["sql"]
-        print(sql)
-        if msg["type"] == "arrow":
-            result = self._conn.query(sql).arrow()
-            return True, [table_to_ipc(result).tobytes()]
-        if msg["type"] == "exec":
-            self._conn.execute(sql)
-            return True, []
-        raise ValueError(f"Unknown query type: {msg['type']}")
 
     def _handle_custom_msg(self, data: dict, buffers: list):
         print(f"{data=}, {buffers=}")
