@@ -106,25 +106,25 @@ class DataTable extends mc.MosaicClient {
 	/** @type {ShadowRoot} */
 	#shadowRoot = this.#root.attachShadow({ mode: "open" });
 	/** @type {HTMLTableSectionElement} */
-	#thead;
+	#thead = document.createElement("thead");
 	/** @type {HTMLTableSectionElement} */
-	#tbody;
-	/** @type {HTMLDivElement} */
-	#tableRoot;
+	#tbody = document.createElement("tbody");
 	/** @type {Array<{ field: string, order: "asc" | "desc" }>} */
 	#orderby = [];
+
 	/** @type {TableRowReader | undefined} */
 	#reader = undefined;
-
 	/** @type {HTMLTableRowElement | undefined} */
 	#dataRow = undefined;
+	/** @type {HTMLDivElement} */
+	#tableRoot;
 
 	// options
 	#rows = 11.5;
 	#rowHeight = 22;
 	#columnWidth = 125;
 	#headerHeight = "50px";
-	refreshTableBody = async () => {};
+	#refreshTableBody = async () => {};
 
 	/** @param {DataTableOptions} source */
 	constructor(source) {
@@ -140,8 +140,6 @@ class DataTable extends mc.MosaicClient {
 
 		/** @type {HTMLDivElement} */
 		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
-		this.#thead = document.createElement("thead");
-		this.#tbody = document.createElement("tbody");
 		// @deno-fmt-ignore
 		root.appendChild(
 			html.fragment`<table class="ipytable" style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
@@ -210,7 +208,7 @@ class DataTable extends mc.MosaicClient {
 					field,
 					toggle.value,
 				);
-				this.refreshTableBody();
+				this.#refreshTableBody();
 			});
 			/** @type {ColumnSummaryVis | undefined} */
 			let vis = undefined;
@@ -271,14 +269,14 @@ class DataTable extends mc.MosaicClient {
 		}
 
 		// we need to put down here so the first effect can run and not exhaust the reader
-		this.refreshTableBody = async () => {
+		this.#refreshTableBody = async () => {
 			this.#reader = await this.#createRowReader();
 			this.#tbody.innerHTML = "";
 			this.#tableRoot.scrollTop = 0;
 			this.#appendRows(this.#rows * 2, infos, format);
 		};
 
-		this.refreshTableBody();
+		this.#refreshTableBody();
 	}
 
 	/**
