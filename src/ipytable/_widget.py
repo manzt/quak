@@ -86,40 +86,11 @@ class Widget(anywidget.AnyWidget):
     @anywidget.experimental.command
     def _query(self, msg: dict, buffers: list[bytes]):
         sql = msg["sql"]
+        print(sql)
         if msg["type"] == "arrow":
             result = self._conn.query(sql).arrow()
-            ipc = table_to_ipc(result)
-            return True, [ipc.tobytes()]
+            return True, [table_to_ipc(result).tobytes()]
         if msg["type"] == "exec":
-            print(sql)
             self._conn.execute(sql)
             return True, []
         raise ValueError(f"Unknown query type: {msg['type']}")
-
-    @anywidget.experimental.command
-    def _execute(self, msg: dict, buffers: list[bytes]):
-        print(msg["sql"])
-        result = self._conn.execute(msg["sql"])
-        self._reader = result.fetch_record_batch(self._rows_per_batch)
-        try:
-            record_batch = self._reader.read_next_batch()
-            ipc = record_batch_to_ipc(record_batch)
-            return False, [ipc.tobytes()]
-        except StopIteration:
-            # No rows, but we need to return a schema
-            ipc = table_to_ipc(self._reader.schema.empty_table())
-            return True, [ipc.tobytes()]
-
-    @anywidget.experimental.command
-    def _next_batch(self, msg: dict, buffers: list[bytes]):
-        print("next batch")
-        if self._reader is None:
-            return True, []
-        try:
-            record_batch = self._reader.read_next_batch()
-            ipc = record_batch_to_ipc(record_batch)
-            return False, [ipc.tobytes()]
-        except StopIteration:
-            ipc = table_to_ipc(self._reader.schema.empty_table())
-            self._reader = None
-            return True, [ipc.tobytes()]

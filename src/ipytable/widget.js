@@ -6,16 +6,13 @@ import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
 // @deno-types="npm:@preact/signals-core@1.6.1"
 import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
-
-// ugh no types for these
+// Ugh no types for these...
 import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.9.0/+esm";
 import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+esm";
 
-/** @typedef {{ schema: arrow.Schema } & AsyncIterator<arrow.Table, arrow.Table>} RecordBatchReader */
-/** @typedef {(ctx: { type: "arrow", sql: string }) => Promise<RecordBatchReader>} FetchRecordBatchReader */
-
 /** @typedef {{ _table_name: string, _columns: Array<string> }} Model */
-
+/** @typedef {(arg: { type: "exec" | "arrow", sql: msql.Query | string }) => Promise<void | arrow.Table>} QueryFn */
+/** @typedef {{ query: QueryFn }} Coordinator */
 /**
  * @typedef Field
  * @property {string} column
@@ -26,7 +23,6 @@ import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+es
  * @property {() => string} toString
  * @property {boolean} [aggregate]
  */
-
 /**
  * @typedef Info
  * @property {string} column
@@ -38,7 +34,6 @@ import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+es
  * @property {number} [max]
  * @property {number} [distinct]
  */
-
 /**
  * @typedef Channel
  * @property {string} as
@@ -47,16 +42,33 @@ import * as msql from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.9.0/+es
  * @property {string} [type]
  * @property {number} [value] // orderby
  */
-
+/** @typedef {ScaleBase & import("npm:@types/d3-scale").ScaleLinear<number, number>} Scale */
+/** @typedef {[number, number]| [Date, Date]} Extent */
+/**
+ * @typedef ScaleBase
+ * @property {ScaleType} type
+ * @property {Extent} domain
+ * @property {[number, number]} range
+ * @property {number} [base]
+ * @property {number} [constant]
+ * @property {number} [exponent]
+ */
 /** @typedef {Histogram} ColumnSummaryVis */
+/** @typedef {"linear" | "log" | "pow" | "symlog" | "time"} ScaleType */
+/**
+ * @typedef Mark
+ * @property {string} type
+ * @property {{getAttribute: (name: string) => any}} plot
+ * @property {(channel: string, opts?: { exact?: boolean }) => Channel} channelField
+ */
 
 export default () => {
 	let coordinator = new mc.Coordinator();
 	return {
 		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
 		initialize({ experimental: { invoke } }) {
-			let connector = {
-				/** @param {{ type: "arrow" | "exec", sql: string }} arg */
+			coordinator.databaseConnector({
+				/** @type {QueryFn} */
 				async query({ type, sql }) {
 					let [_, buffers] = await invoke("_query", { type, sql });
 					if (buffers.length === 0) {
@@ -65,29 +77,7 @@ export default () => {
 					let table = arrow.tableFromIPC(buffers[0]);
 					return table;
 				},
-				/**
-				 * @param {{ type: "arrow", sql: string }} arg
-				 * @returns {Promise<RecordBatchReader>}
-				 */
-				async queryBatches({ sql }) {
-					let [done, [ipc]] = await invoke("_execute", { sql });
-					let first = true;
-					let table = arrow.tableFromIPC(ipc);
-					return {
-						schema: table.schema,
-						async next() {
-							if (first) {
-								first = false;
-								return { done, value: table };
-							}
-							[done, [ipc]] = await invoke("_next_batch", {});
-							table = arrow.tableFromIPC(ipc);
-							return { done, value: table };
-						},
-					};
-				},
-			};
-			coordinator.databaseConnector(connector);
+			});
 		},
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
 		render({ model, el }) {
@@ -176,24 +166,22 @@ class DataTable extends mc.MosaicClient {
 	}
 
 	async #createRowReader() {
-		let { queryBatches } = this.coordinator?.manager?.db;
-		assert(
-			typeof queryBatches === "function",
-			"Requires queryBatches for db.",
-		);
-		let query = msql.Query.from(this.#source.table).select("*");
-		if (this.#orderby.length > 0) {
+		/** @type {Coordinator} */
+		let coordinator = this.coordinator;
+		let query = msql.Query
+			.from(this.#source.table)
+			.select(...this.#source.columns);
+		if (this.#orderby.length) {
 			query.orderby(
 				...this.#orderby.map((o) =>
 					o.order === "asc" ? asc(o.field) : msql.desc(o.field)
 				),
 			);
 		}
-		let inner = await queryBatches({
-			type: "arrow",
-			sql: query.toString(),
-		});
-		return new TableRowReader(inner);
+		console.log(query);
+		let reader = new TableRowReader(coordinator, query);
+		await reader.init();
+		return reader;
 	}
 
 	/** @param {Array<Info>} infos */
@@ -217,14 +205,11 @@ class DataTable extends mc.MosaicClient {
 			/** @type {signals.Signal<"unset" | "asc" | "desc">} */
 			let toggle = signals.signal("unset");
 			signals.effect(() => {
-				let orderby = this.#orderby.filter((o) => o.field !== field.name);
-				if (toggle.value !== "unset") {
-					orderby.unshift({
-						field: field.name,
-						order: toggle.value,
-					});
-				}
-				this.#orderby = orderby;
+				this.#orderby = getNextOrderby(
+					this.#orderby,
+					field,
+					toggle.value,
+				);
 				this.refreshTableBody();
 			});
 			/** @type {ColumnSummaryVis | undefined} */
@@ -350,31 +335,36 @@ class DataTable extends mc.MosaicClient {
 			let value = document.createTextNode(stringified);
 			td.appendChild(value);
 		}
-		console.log(itr);
 		this.#tbody.append(itr);
 	}
+}
+
+/**
+ * @param {Array<{ field: string, order: "asc" | "desc" }>} current
+ * @param {arrow.Field} field
+ * @param {"asc" | "desc" | "unset"} state
+ */
+function getNextOrderby(current, field, state) {
+	let next = current.filter((o) => o.field !== field.name);
+	if (state !== "unset") {
+		next.unshift({ field: field.name, order: state });
+	}
+	return next;
 }
 
 /** @implements {Mark} */
 class Histogram extends mc.MosaicClient {
 	type = "rectY";
-
 	/** @type {{ table: string, column: string, type: "number" | "date" }} */
 	#source;
-
 	/** @type {HTMLElement} */
 	#el = document.createElement("div");
-
 	/** @type {Array<Channel>} */
 	#channels = [];
-
+	/** @type {Set<unknown>} */
 	#markSet = new Set();
-
 	/** @type {Interval1D} */
 	#interval;
-
-	/** @type {any} */
-	_info = undefined;
 
 	/**
 	 * @param {{ table: string, column: string, type: "number" | "date", filterBy?: mc.Selection }} source
@@ -525,23 +515,46 @@ const TRUNCATE = /** @type {const} */ ({
 
 class TableRowReader {
 	#index = 0;
-	/** @param {RecordBatchReader} reader */
-	constructor(reader) {
-		this.inner = reader;
+	#offset = 0;
+	#batchSize = 256;
+	/** @type {msql.Query} */
+	#query;
+	/** @type {Coordinator} */
+	#mc;
+	/** @type {arrow.Schema | undefined} */
+	#schema = undefined;
+
+	/**
+	 * @param {Coordinator} mc
+	 * @param {msql.Query} query
+	 */
+	constructor(mc, query) {
+		this.#mc = mc;
+		this.#query = query;
 		/** @type {boolean} */
 		this.done = false;
-		/** @type {IterableIterator<arrow.StructRowProxy> | undefined} */
-		this.iter = undefined;
+	}
+
+	async init() {
+		await this.#readNextBatch();
 	}
 
 	get schema() {
-		return this.inner.schema;
+		assert(this.#schema, "No schema. Did you forget to call init()?");
+		return this.#schema;
 	}
 
 	async #readNextBatch() {
-		const { value, done } = await this.inner.next();
-		this.done = done ?? false;
-		this.iter = value[Symbol.iterator]();
+		let sql = this.#query
+			.clone()
+			.limit(this.#batchSize)
+			.offset(this.#offset);
+		let table = await this.#mc.query(sql);
+		assert(table, "No table");
+		this.#schema = table.schema;
+		this.iter = table[Symbol.iterator]();
+		this.done = table.numRows < this.#batchSize;
+		this.#offset += this.#batchSize;
 	}
 
 	/** @return {IteratorResult<{ kind: "batch"; readNextBatch: () => Promise<void> } | { kind: "row"; data: arrow.StructRowProxy; index: number }>} */
@@ -1145,15 +1158,6 @@ function shouldGrayoutValue(value) {
 
 const Transform = Symbol();
 
-/** @typedef {"linear" | "log" | "pow" | "symlog" | "time"} ScaleType */
-
-/**
- * @typedef Mark
- * @property {string} type
- * @property {{getAttribute: (name: string) => any}} plot
- * @property {(channel: string, opts?: { exact?: boolean }) => Channel} channelField
- */
-
 /**
  * @param {Mark} mark
  * @param {string} channel
@@ -1534,10 +1538,6 @@ let axisBottom =
 	/** @type {import("npm:@types/d3-axis").axisBottom} */ (d3.axisBottom);
 let format = // @ts-expect-error - d3 types are incorrect
 	/** @type {import("npm:@types/d3-format").format} */ (d3.format);
-let min = // @ts-expect-error - d3 types are incorrect
-	/** @type {import("npm:@types/d3-array").min} */ (d3.min);
-let max = // @ts-expect-error - d3 types are incorrect
-	/** @type {import("npm:@types/d3-array").max} */ (d3.max);
 let ascending = // @ts-expect-error - d3 types are incorrect
 	/** @type {import("npm:@types/d3-array").ascending} */ (d3.ascending);
 
@@ -1547,7 +1547,6 @@ let ascending = // @ts-expect-error - d3 types are incorrect
  * @property {number} x1
  * @property {number} length
  */
-
 /**
  * @typedef HistogramOptions
  * @property {number} [width]
@@ -1867,15 +1866,3 @@ const closeTo = (() => {
 		) || false;
 	};
 })();
-
-/** @typedef {ScaleBase & import("npm:@types/d3-scale").ScaleLinear<number, number>} Scale */
-/** @typedef {[number, number]| [Date, Date]} Extent */
-/**
- * @typedef ScaleBase
- * @property {ScaleType} type
- * @property {Extent} domain
- * @property {[number, number]} range
- * @property {number} [base]
- * @property {number} [constant]
- * @property {number} [exponent]
- */
