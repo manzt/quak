@@ -1,24 +1,26 @@
-# ipytable
+# quak
+
+for data that talks like a duck
 
 ## install
 
 ```sh
-pip install ipytable
+pip install quak
 ```
 
 ## usage
 
 ```python
-import ipytable
+import quak
 import polars as pl
 
 source = "https://raw.githubusercontent.com/vega/vega-datasets/main/data/airports.csv"
 df = pl.read_csv(source)
 
-ipytable.Widget(df)
+quak.Widget(df)
 ```
 
-`ipytable` is dataframe agnostic, meaning it can be used with any dataframe
+`quak` is dataframe agnostic, meaning it can be used with any dataframe
 library that supports [Python dataframe interchange
 protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html).
 
@@ -27,7 +29,7 @@ import pandas as pd
 
 df = pd.read_csv(source, dtype_backend="pyarrow", engine="pyarrow")
 
-ipytable.Widget(df)
+quak.Widget(df)
 ```
 
 ## development
