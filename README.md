@@ -1,4 +1,4 @@
-# quak
+# quak /kwæk/
 
 for data that talks like a duck
 
