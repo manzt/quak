@@ -200,10 +200,10 @@ class DataTable extends mc.MosaicClient {
 		}
 
 		/** @type {HTMLDivElement} */
-		let root = html`<div class="ipytable" style=${{ maxHeight }}>`;
+		let root = html`<div class="quak" style=${{ maxHeight }}>`;
 		// @deno-fmt-ignore
 		root.appendChild(
-			html.fragment`<table class="ipytable" style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
+			html.fragment`<table class="quak" style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
 		);
 		this.#shadowRoot.appendChild(html`<style>${STYLES}</style>`);
 		this.#shadowRoot.appendChild(root);
@@ -799,7 +799,7 @@ const STYLES = /*css*/ `\
 	border: 1px solid var(--moon-gray);
 }
 
-.ipytable {
+.quak {
   border-radius: 0.2rem;
   border: 1px solid var(--light-silver);
   overflow-y: auto;

@@ -10,7 +10,7 @@
 
 -e file:.
 anywidget==0.9.12
-    # via ipytable
+    # via quak
 asttokens==2.4.1
     # via stack-data
 comm==0.2.2
@@ -18,7 +18,7 @@ comm==0.2.2
 decorator==5.1.1
     # via ipython
 duckdb==1.0.0
-    # via ipytable
+    # via quak
 executing==2.0.1
     # via stack-data
 ipython==8.25.0
@@ -32,7 +32,7 @@ jupyterlab-widgets==3.0.11
 matplotlib-inline==0.1.7
     # via ipython
 msgspec==0.18.6
-    # via ipytable
+    # via quak
 numpy==2.0.0
     # via pyarrow
 parso==0.8.4
@@ -48,7 +48,7 @@ ptyprocess==0.7.0
 pure-eval==0.2.2
     # via stack-data
 pyarrow==16.1.0
-    # via ipytable
+    # via quak
 pygments==2.18.0
     # via ipython
 six==1.16.0
