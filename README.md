@@ -1,6 +1,6 @@
 # quak /kwæk/
 
-for data that talks like a duck
+an [anywidget](https://github.com/manzt/anywidget) for data that talks like a duck
 
 ## install
 
