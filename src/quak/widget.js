@@ -90,7 +90,6 @@ export default () => {
 			}
 
 			model.on("msg:custom", (msg, buffers) => {
-				console.log(msg, buffers);
 				logger.group(`query ${msg.uuid}`);
 				logger.log("received message", msg, buffers);
 				let query = openQueries.get(msg.uuid);
@@ -266,7 +265,7 @@ class DataTable extends mc.MosaicClient {
 				if (entry.isIntersecting) {
 					this.coordinator.connect(vis);
 				} else {
-					this.coordinator.disconnect(vis);
+					this.coordinator?.disconnect(vis);
 				}
 			}
 		}, {
@@ -293,7 +292,7 @@ class DataTable extends mc.MosaicClient {
 					table: this.#source.table,
 					column: field.name,
 					type: info.type,
-					// filterBy: $brush,
+					filterBy: $brush,
 				});
 			}
 			let th = thcol(field, this.#columnWidth, toggle, vis);
@@ -574,20 +573,19 @@ class Histogram extends mc.MosaicClient {
 			x1: d.x2,
 			length: d.y,
 		}));
+		let nullCount = 0;
+		let nullBinIndex = bins.findIndex((b) => b.x0 == null);
+		if (nullBinIndex >= 0) {
+			nullCount = bins[nullBinIndex].length;
+			bins.splice(nullBinIndex, 1);
+		}
 		if (!this.#initialized) {
-			// TODO: Handle nulls
-			let nullCount = 0;
-			let nullBinIndex = bins.findIndex((b) => b.x0 == null);
-			if (nullBinIndex >= 0) {
-				nullCount = bins[nullBinIndex].length;
-				bins.splice(nullBinIndex, 1);
-			}
 			this.svg = hist(bins, { nullCount, type: this.#source.type });
 			this.#interval?.init(this.svg, null);
 			this.#el.appendChild(this.svg);
 			this.#initialized = true;
 		} else {
-			this.svg?.update(bins);
+			this.svg?.update(bins, { nullCount });
 		}
 		return this;
 	}
@@ -805,6 +803,13 @@ const STYLES = /*css*/ `\
   --gray: #929292;
   --dark-gray: #333;
   --moon-gray: #c4c4c4;
+  --mid-gray: #6e6e6e;
+
+  --dark-green: #257d54;
+  --green: #2f9666;
+  --light-green: #38a070;
+  --lightest-green: #c5e4d6;
+  --washed-green: #ecfbf5;
 }
 
 .highlight {
@@ -1477,7 +1482,7 @@ let formatMap = {
 /**
  * @param {Array<Bin>} data
  * @param {HistogramOptions} [options]
- * @returns {SVGSVGElement & { scale: (type: string) => Scale }}
+ * @returns {SVGSVGElement & { scale: (type: string) => Scale, update(bins: Array<Bin>, opts: { nullCount: number }): void }}
  */
 function hist(
 	data,
@@ -1490,8 +1495,8 @@ function hist(
 		marginBottom = 12,
 		marginLeft = 2,
 		nullCount = 0,
-		fillColor = "#fdba74",
-		nullFillColor = "#c2410c",
+		fillColor = "#64748b",
+		nullFillColor = "#ca8a04",
 	} = {},
 ) {
 	let bins = [...data];
@@ -1510,7 +1515,7 @@ function hist(
 		);
 		x = scaleTime()
 			.domain([bins[0].x0, bins[bins.length - 1].x1])
-			.range([marginLeft + avgBinWidth, width - marginRight]);
+			.range([marginLeft + avgBinWidth + 3, width - marginRight]);
 		xAxis = axisBottom(x)
 			.tickValues([midFirstBin, midLastBin])
 			.tickFormat(formatMap[interval.interval])
@@ -1518,7 +1523,7 @@ function hist(
 	} else {
 		x = scaleLinear()
 			.domain([bins[0].x0, bins[bins.length - 1].x1])
-			.range([marginLeft + avgBinWidth, width - marginRight]);
+			.range([marginLeft + avgBinWidth + 3, width - marginRight]);
 		xAxis = axisBottom(x)
 			.tickValues([midFirstBin, midLastBin])
 			.tickFormat(format("~s"))
@@ -1535,10 +1540,24 @@ function hist(
 		.attr("viewBox", [0, 0, width, height])
 		.attr("style", "max-width: 100%; height: auto; overflow: visible;");
 
-	svg
+	// background bars for the entire dataset
+	svg.append("g")
+		.attr("fill", "var(--moon-gray)")
+		.selectAll("rect")
+		.data(bins)
+		.join("rect")
+		.attr("x", (d) => x(d.x0) + 1)
+		.attr("width", (d) => x(d.x1) - x(d.x0) - 1)
+		.attr("y", (d) => y(d.length))
+		.attr("height", (d) => y(0) - y(d.length));
+
+	// Foreground bars for the current subset
+	let foreGrnd = svg
 		.append("g")
-		.attr("fill", fillColor)
-		.selectAll()
+		.attr("fill", fillColor);
+
+	foreGrnd
+		.selectAll("rect")
 		.data(bins)
 		.join("rect")
 		.attr("x", (d) => x(d.x0) + 1)
@@ -1547,9 +1566,21 @@ function hist(
 		.attr("height", (d) => y(0) - y(d.length));
 
 	// Add the null bin separately
+	/** @type {{ grp: import("npm:@types/d3-selection").Selection<SVGGElement, undefined, null, undefined>, scale: import("npm:@types/d3-scale").ScaleLinear<number, number> } | undefined} */
+	let nullNode = undefined;
 	if (nullCount > 0) {
 		let nullXScale = scaleLinear()
 			.range([marginLeft, marginLeft + avgBinWidth]);
+
+		// background bar for the null bin
+		svg.append("g")
+			.attr("fill", "var(--moon-gray)")
+			.append("rect")
+			.attr("x", nullXScale(0))
+			.attr("width", nullXScale(1) - nullXScale(0))
+			.attr("y", y(nullCount))
+			.attr("height", y(0) - y(nullCount))
+			.attr("fill", nullFillColor);
 
 		let nullGrp = svg
 			.append("g")
@@ -1581,8 +1612,12 @@ function hist(
 			.attr("y", 4.5)
 			.attr("dy", "0.71em")
 			.attr("text-anchor", "middle")
-			.attr("font-size", "10")
-			.text("∅");
+			.text("∅")
+			.attr("font-size", "0.9em")
+			.attr("font-family", "var(--sans-serif)")
+			.attr("font-weight", "normal");
+
+		nullNode = { grp: nullGrp, scale: nullXScale };
 	}
 
 	svg
@@ -1623,6 +1658,37 @@ function hist(
 			let scale = scales[type];
 			assert(scale, "Invalid scale type");
 			return scale;
+		},
+		/**
+		 * @param {Array<Bin>} bins
+		 * @param {{ nullCount: number }} opts
+		 */
+		update(bins, { nullCount }) {
+			// scales and bins are the same but the values have changed
+			// update the rects
+			bins = [...bins];
+			bins.sort((a, b) => a.x0 - b.x0);
+			foreGrnd
+				.selectAll("rect")
+				.data(bins)
+				.join(
+					(enter) =>
+						enter.append("rect")
+							.attr("x", (d) => x(d.x0) + 1)
+							.attr("width", (d) => x(d.x1) - x(d.x0) - 1)
+							.attr("y", (d) => y(d.length))
+							.attr("height", (d) => y(0) - y(d.length)),
+					(update) =>
+						update
+							.attr("x", (d) => x(d.x0) + 1)
+							.attr("width", (d) => x(d.x1) - x(d.x0) - 1)
+							.attr("y", (d) => y(d.length))
+							.attr("height", (d) => y(0) - y(d.length)),
+				);
+			nullNode?.grp
+				.select("rect")
+				.attr("y", y(nullCount))
+				.attr("height", y(0) - y(nullCount));
 		},
 	});
 }
