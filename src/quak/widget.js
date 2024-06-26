@@ -258,6 +258,21 @@ class DataTable extends mc.MosaicClient {
 
 		let $brush = mc.Selection.crossfilter();
 
+		let observer = new IntersectionObserver((entries) => {
+			for (let entry of entries) {
+				/** @type {ColumnSummaryVis | undefined} */
+				let vis = /** @type {any} */ (entry.target).vis;
+				if (!vis) continue;
+				if (entry.isIntersecting) {
+					this.coordinator.connect(vis);
+				} else {
+					this.coordinator.disconnect(vis);
+				}
+			}
+		}, {
+			root: this.#tableRoot,
+		});
+
 		let cols = reader.schema.fields.map((field) => {
 			let info = infos.find((c) => c.column === field.name);
 			assert(info, `No info for column ${field.name}`);
@@ -280,9 +295,10 @@ class DataTable extends mc.MosaicClient {
 					type: info.type,
 					// filterBy: $brush,
 				});
-				this.coordinator.connect(vis);
 			}
-			return thcol(field, this.#columnWidth, toggle, vis);
+			let th = thcol(field, this.#columnWidth, toggle, vis);
+			observer.observe(th);
+			return th;
 		});
 		// @deno-fmt-ignore
 		this.#thead.appendChild(
@@ -776,7 +792,7 @@ function thcol(field, minWidth, sortState, vis) {
 		verticalResizeHandle.style.backgroundColor = "transparent";
 	});
 
-	return th;
+	return Object.assign(th, { vis });
 }
 
 const STYLES = /*css*/ `\
