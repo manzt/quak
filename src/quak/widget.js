@@ -1,9 +1,20 @@
-import { html } from "https://esm.sh/htl@0.3.1";
-// @deno-types="npm:apache-arrow@16.1.0"
-import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
 import { Temporal } from "https://esm.sh/@js-temporal/polyfill@0.4.4";
 import * as signals from "https://esm.sh/@preact/signals-core@1.6.1";
 import * as uuid from "https://esm.sh/@lukeed/uuid@2.0.1";
+// @deno-types="npm:htl@0.3"
+import { html } from "https://esm.sh/htl@0.3.1"; // TODO: Remove or replace with htm
+// @deno-types="npm:apache-arrow@16"
+import * as arrow from "https://esm.sh/apache-arrow@16.1.0";
+// @deno-types="npm:@types/d3-selection@3"
+import * as d3Selection from "https://esm.sh/d3-selection@3.0.0";
+// @deno-types="npm:@types/d3-scale@4"
+import * as d3Scale from "https://esm.sh/d3-scale@4.0.2";
+// @deno-types="npm:@types/d3-axis@3"
+import * as d3Axis from "https://esm.sh/d3-axis@3.0.0";
+// @deno-types="npm:@types/d3-format@3"
+import * as d3Format from "https://esm.sh/d3-format@3.1.0";
+// @deno-types="npm:@types/d3-time-format@4"
+import * as d3TimeFormat from "https://esm.sh/d3-time-format@4.1.0";
 
 // Ugh no types for these...
 import * as mc from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.10.0/+esm";
@@ -64,9 +75,13 @@ import * as mplot from "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-plot@0.10.0/
 
 export default () => {
 	let coordinator = new mc.Coordinator();
+	/** @type {arrow.Schema} */
+	let schema;
 	return {
 		/** @type {import("npm:@anywidget/types@0.1.9").Initialize<Model>} */
-		initialize({ model }) {
+		async initialize({ model }) {
+			console.log("INITIALIZE");
+
 			// @ts-expect-error - ok to have no args
 			let logger = coordinator.logger();
 
@@ -128,12 +143,21 @@ export default () => {
 			let connector = {
 				/** @type {QueryFn} */
 				query(query) {
-					console.log(query);
 					return new Promise((resolve, reject) => send(query, resolve, reject));
 				},
 			};
 
 			coordinator.databaseConnector(connector);
+
+			// get some initial data to get the schema
+			let empty = await coordinator.query(
+				msql.Query
+					.from(model.get("_table_name"))
+					.select(...model.get("_columns"))
+					.limit(0)
+					.toString(),
+			);
+			schema = empty.schema;
 
 			return () => {
 				coordinator.clear();
@@ -141,9 +165,12 @@ export default () => {
 		},
 		/** @type {import("npm:@anywidget/types@0.1.9").Render<Model>} */
 		render({ model, el }) {
+			let $brush = mc.Selection.crossfilter();
+
 			let table = new DataTable({
 				table: model.get("_table_name"),
-				columns: model.get("_columns"),
+				schema: schema,
+				filterBy: $brush,
 			});
 			coordinator.connect(table);
 			el.appendChild(table.node());
@@ -154,8 +181,9 @@ export default () => {
 /**
  * @typedef DataTableOptions
  * @property {string} table
- * @property {Array<string>} columns
+ * @property {arrow.Schema} schema
  * @property {number} [height]
+ * @property {mc.Selection} [filterBy]
  */
 
 class DataTable extends mc.MosaicClient {
@@ -179,6 +207,9 @@ class DataTable extends mc.MosaicClient {
 	/** @type {HTMLDivElement} */
 	#tableRoot;
 
+	#offset = 0;
+	#limit = 100;
+
 	// options
 	#rows = 11.5;
 	#rowHeight = 22;
@@ -186,10 +217,20 @@ class DataTable extends mc.MosaicClient {
 	#headerHeight = "50px";
 	#refreshTableBody = async () => {};
 
+	/** @type {Record<string, string>} */
+	#classes;
+	/** @type {Record<string, (value: any) => string>} */
+	#format;
+
+	/** @type {{ field: string, order: "asc" | "desc" } | null} */
+	#sort = null;
+
 	/** @param {DataTableOptions} source */
 	constructor(source) {
-		super(undefined);
+		super(source.filterBy);
 		this.#source = source;
+		this.#classes = classof(source.schema);
+		this.#format = formatof(source.schema);
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
 		// if maxHeight is set, calculate the number of rows to display
@@ -207,12 +248,22 @@ class DataTable extends mc.MosaicClient {
 		this.#shadowRoot.appendChild(html`<style>${STYLES}</style>`);
 		this.#shadowRoot.appendChild(root);
 		this.#tableRoot = root;
+
+		// scroll event listener
+		this.#tableRoot.addEventListener("scroll", async () => {
+			let isAtBottom =
+				this.#tableRoot.scrollHeight - this.#tableRoot.scrollTop <
+					this.#rows * this.#rowHeight * 1.5;
+			if (isAtBottom) {
+				await this.#appendRows(this.#rows);
+			}
+		});
 	}
 
 	/** @returns {Array<{ table: string, column: string, stats: Array<string> }>} */
 	// @ts-expect-error - _field type is bad from MosaicClient
 	fields() {
-		return this.#source.columns.map((column) => ({
+		return this.#columns.map((column) => ({
 			table: this.#source.table,
 			column,
 			stats: [],
@@ -223,12 +274,50 @@ class DataTable extends mc.MosaicClient {
 		return this.#root;
 	}
 
+	get #columns() {
+		return this.#source.schema.fields.map((field) => field.name);
+	}
+
+	/**
+	 * @param {Array<unknown>} filter
+	 */
+	query(filter = []) {
+		return msql.Query.from(this.#source.table)
+			.select(this.#columns)
+			.where(filter)
+			.orderby(
+				this.#orderby.map((o) =>
+					o.order === "asc" ? asc(o.field) : msql.desc(o.field)
+				),
+			)
+			.limit(this.#limit)
+			.offset(this.#offset);
+	}
+
+	queryResult(data) {
+		console.log("QUERY RESULT");
+		console.log(data);
+
+		return this;
+	}
+
+	requestData(offset = 0) {
+		this.#offset = offset;
+
+		// request next data batch
+		let query = this.query(this.filterBy?.predicate(this));
+		this.requestQuery(query);
+
+		// prefetch subsequent data batch
+		this.coordinator.prefetch(query.clone().offset(offset + this.#limit));
+	}
+
 	async #createRowReader() {
 		/** @type {Coordinator} */
 		let coordinator = this.coordinator;
 		let query = msql.Query
 			.from(this.#source.table)
-			.select(...this.#source.columns);
+			.select(...this.#columns);
 		if (this.#orderby.length) {
 			query.orderby(
 				...this.#orderby.map((o) =>
@@ -236,26 +325,19 @@ class DataTable extends mc.MosaicClient {
 				),
 			);
 		}
-		console.log(query);
 		let reader = new TableRowReader(coordinator, query);
 		await reader.init();
 		return reader;
 	}
 
 	/** @param {Array<Info>} infos */
-	async #onFieldInfo(infos) {
-		let reader = await this.#createRowReader();
-		let classes = classof(reader.schema);
-		let format = formatof(reader.schema);
-
+	fieldInfo(infos) {
 		// @deno-fmt-ignore
 		this.#dataRow = html`<tr><td></td>${
-			infos.map((info) => html.fragment`<td class=${classes[info.column]}></td>`)
+			infos.map((info) => html.fragment`<td class=${this.#classes[info.column]}></td>`)
 		}
 			<td style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></td>
 		</tr>`;
-
-		let $brush = mc.Selection.crossfilter();
 
 		let observer = new IntersectionObserver((entries) => {
 			for (let entry of entries) {
@@ -272,7 +354,7 @@ class DataTable extends mc.MosaicClient {
 			root: this.#tableRoot,
 		});
 
-		let cols = reader.schema.fields.map((field) => {
+		let cols = this.#source.schema.fields.map((field) => {
 			let info = infos.find((c) => c.column === field.name);
 			assert(info, `No info for column ${field.name}`);
 			/** @type {signals.Signal<"unset" | "asc" | "desc">} */
@@ -292,7 +374,7 @@ class DataTable extends mc.MosaicClient {
 					table: this.#source.table,
 					column: field.name,
 					type: info.type,
-					filterBy: $brush,
+					filterBy: this.#source.filterBy,
 				});
 			}
 			let th = thcol(field, this.#columnWidth, toggle, vis);
@@ -307,18 +389,6 @@ class DataTable extends mc.MosaicClient {
 				<th style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></th>
 			</tr>`,
 		);
-
-		// scroll behavior
-		{
-			this.#tableRoot.addEventListener("scroll", async () => {
-				let isAtBottom =
-					this.#tableRoot.scrollHeight - this.#tableRoot.scrollTop <
-						this.#rows * this.#rowHeight * 1.5;
-				if (isAtBottom) {
-					await this.#appendRows(this.#rows, infos, format);
-				}
-			});
-		}
 
 		// highlight on hover
 		{
@@ -347,28 +417,20 @@ class DataTable extends mc.MosaicClient {
 		// we need to put down here so the first effect can run and not exhaust the reader
 		this.#refreshTableBody = async () => {
 			this.#reader = await this.#createRowReader();
-			this.#tbody.innerHTML = "";
+			this.#tbody.replaceChildren();
 			this.#tableRoot.scrollTop = 0;
-			this.#appendRows(this.#rows * 2, infos, format);
+			this.#appendRows(this.#rows * 2);
 		};
 
 		this.#refreshTableBody();
-	}
-
-	/** @param {Array<Info>} infos */
-	fieldInfo(infos) {
-		// Mosaic expects a synchronous return, so we wrap the handler in an async function
-		this.#onFieldInfo(infos);
 		return this;
 	}
 
 	/**
 	 * Number of rows to append
 	 * @param {number} nrows
-	 * @param {Array<Info>} infos
-	 * @param {Record<string, (value: any) => string>} format
 	 */
-	async #appendRows(nrows, infos, format) {
+	async #appendRows(nrows) {
 		nrows = Math.trunc(nrows);
 		assert(this.#reader, "No reader");
 		while (nrows >= 0) {
@@ -378,12 +440,7 @@ class DataTable extends mc.MosaicClient {
 				break;
 			}
 			if (result.value.kind === "row") {
-				this.#appendRow(
-					result.value.data,
-					result.value.index,
-					infos,
-					format,
-				);
+				this.#appendRow(result.value.data, result.value.index);
 				nrows--;
 				continue;
 			}
@@ -397,20 +454,18 @@ class DataTable extends mc.MosaicClient {
 	/**
 	 * @param {arrow.StructRowProxy} d
 	 * @param {number} i
-	 * @param {Array<Info>} infos
-	 * @param {Record<string, (value: any) => string>} format
 	 */
-	#appendRow(d, i, infos, format) {
+	#appendRow(d, i) {
 		let itr = this.#dataRow?.cloneNode(true);
 		assert(itr, "Must have a data row");
 		let td = /** @type {HTMLTableCellElement} */ (itr?.childNodes[0]);
 		td.appendChild(document.createTextNode(String(i)));
-		for (let j = 0; j < infos.length; ++j) {
+		for (let j = 0; j < this.#columns.length; ++j) {
 			td = /** @type {HTMLTableCellElement} */ (itr.childNodes[j + 1]);
 			td.classList.remove("gray");
-			let col = infos[j].column;
+			let col = this.#columns[j];
 			/** @type {string} */
-			let stringified = format[col](d[col]);
+			let stringified = this.#format[col](d[col]);
 			if (shouldGrayoutValue(stringified)) {
 				td.classList.add("gray");
 			}
@@ -580,7 +635,10 @@ class Histogram extends mc.MosaicClient {
 			bins.splice(nullBinIndex, 1);
 		}
 		if (!this.#initialized) {
-			this.svg = hist(bins, { nullCount, type: this.#source.type });
+			this.svg = crossfilterHistogram(bins, {
+				nullCount,
+				type: this.#source.type,
+			});
 			this.#interval?.init(this.svg, null);
 			this.#el.appendChild(this.svg);
 			this.#initialized = true;
@@ -804,12 +862,6 @@ const STYLES = /*css*/ `\
   --dark-gray: #333;
   --moon-gray: #c4c4c4;
   --mid-gray: #6e6e6e;
-
-  --dark-green: #257d54;
-  --green: #2f9666;
-  --light-green: #38a070;
-  --lightest-green: #c5e4d6;
-  --washed-green: #ecfbf5;
 }
 
 .highlight {
@@ -837,7 +889,6 @@ table {
   font: 13px / 1.2 var(--sans-serif);
 
   width: 100%;
-  pointer-events: all;
 }
 
 thead {
@@ -1426,23 +1477,31 @@ export function markQuery(channels, table, skip = []) {
 	return q;
 }
 
-// @deno-types="npm:@types/d3@7.4.3"
-import * as d3 from "https://esm.sh/d3@7.8.5";
-// TODO: idk these types are really annoying
-let scaleLinear = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
-	// @ts-expect-error - d3 types are incorrect
-	.scaleLinear);
-let scaleTime = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
-	// @ts-expect-error - d3 types are incorrect
-	.scaleTime);
-let create = /** @type {import("npm:@types/d3-selection").create} */ (d3
-	// @ts-expect-error - d3 types are incorrect
-	.create);
-let axisBottom =
-	// @ts-expect-error - d3 types are incorrect
-	/** @type {import("npm:@types/d3-axis").axisBottom} */ (d3.axisBottom);
-let format = // @ts-expect-error - d3 types are incorrect
-	/** @type {import("npm:@types/d3-format").format} */ (d3.format);
+let formatMap = {
+	[MILLISECOND]: d3TimeFormat.timeFormat("%L"),
+	[SECOND]: d3TimeFormat.timeFormat("%S s"),
+	[MINUTE]: d3TimeFormat.timeFormat("%H:%M"),
+	[HOUR]: d3TimeFormat.timeFormat("%H:%M"),
+	[DAY]: d3TimeFormat.timeFormat("%b %d"),
+	[MONTH]: d3TimeFormat.timeFormat("%b %Y"),
+	[YEAR]: d3TimeFormat.timeFormat("%Y"),
+};
+
+/**
+ * @param {"date" | "number"} type
+ * @param {Array<Bin>} bins
+ */
+function tickFormatterForBins(type, bins) {
+	if (type === "number") {
+		return d3Format.format("~s");
+	}
+	let interval = timeInterval(
+		bins[0].x0,
+		bins[bins.length - 1].x1,
+		bins.length,
+	);
+	return formatMap[interval.interval];
+}
 
 /**
  * @typedef Bin
@@ -1452,6 +1511,7 @@ let format = // @ts-expect-error - d3 types are incorrect
  */
 /**
  * @typedef HistogramOptions
+ * @property {"number" | "date"} type
  * @property {number} [width]
  * @property {number} [height]
  * @property {number} [marginTop]
@@ -1461,33 +1521,20 @@ let format = // @ts-expect-error - d3 types are incorrect
  * @property {number} [nullCount]
  * @property {string} [fillColor]
  * @property {string} [nullFillColor]
- * @property {"number" | "date"} [type]
- * @property {SVGElement} [el]
+ * @property {string} [backgroundBarColor]
  */
-
-let timeFormat = /** @type {import("npm:@types/d3-scale").scaleLinear} */ (d3
-	// @ts-expect-error - d3 types are incorrect
-	.timeFormat);
-
-let formatMap = {
-	[MILLISECOND]: timeFormat("%L"),
-	[SECOND]: timeFormat("%S s"),
-	[MINUTE]: timeFormat("%H:%M"),
-	[HOUR]: timeFormat("%H:%M"),
-	[DAY]: timeFormat("%b %d"),
-	[MONTH]: timeFormat("%b %Y"),
-	[YEAR]: timeFormat("%Y"),
-};
 
 /**
- * @param {Array<Bin>} data
- * @param {HistogramOptions} [options]
+ * Returns an updatable histogram SVG element.
+ *
+ * @param {Array<Bin>} bins - the total bins to display
+ * @param {HistogramOptions} options
  * @returns {SVGSVGElement & { scale: (type: string) => Scale, update(bins: Array<Bin>, opts: { nullCount: number }): void }}
  */
-function hist(
-	data,
+function crossfilterHistogram(
+	bins,
 	{
-		type,
+		type = "number",
 		width = 125,
 		height = 40,
 		marginTop = 0,
@@ -1497,116 +1544,107 @@ function hist(
 		nullCount = 0,
 		fillColor = "#64748b",
 		nullFillColor = "#ca8a04",
-	} = {},
+		backgroundBarColor = "var(--moon-gray)",
+	},
 ) {
-	let bins = [...data];
-	bins.sort((a, b) => a.x0 - b.x0);
-	let avgBinWidth = nullCount === 0 ? 0 : width / (bins.length + 1);
+	let nullBinWidth = nullCount === 0 ? 0 : 5;
+	let spacing = nullBinWidth ? 4 : 0;
+	let extent = /** @type {const} */ ([
+		Math.min(...bins.map((d) => d.x0)),
+		Math.max(...bins.map((d) => d.x1)),
+	]);
+	let x = type === "date" ? d3Scale.scaleUtc() : d3Scale.scaleLinear();
+	x
+		.domain(extent)
+		// @ts-expect-error - range is ok with number for both number and time
+		.range([marginLeft + nullBinWidth + spacing, width - marginRight])
+		.nice();
 
-	let x, xAxis;
-	let midFirstBin = (bins[0].x0 + bins[0].x1) / 2;
-	let midLastBin = (bins[bins.length - 1].x0 + bins[bins.length - 1].x1) / 2;
-
-	if (type === "date") {
-		let interval = timeInterval(
-			bins[0].x0,
-			bins[bins.length - 1].x1,
-			bins.length,
-		);
-		x = scaleTime()
-			.domain([bins[0].x0, bins[bins.length - 1].x1])
-			.range([marginLeft + avgBinWidth + 3, width - marginRight]);
-		xAxis = axisBottom(x)
-			.tickValues([midFirstBin, midLastBin])
-			.tickFormat(formatMap[interval.interval])
-			.tickSize(2.5);
-	} else {
-		x = scaleLinear()
-			.domain([bins[0].x0, bins[bins.length - 1].x1])
-			.range([marginLeft + avgBinWidth + 3, width - marginRight]);
-		xAxis = axisBottom(x)
-			.tickValues([midFirstBin, midLastBin])
-			.tickFormat(format("~s"))
-			.tickSize(2.5);
-	}
-
-	let y = scaleLinear()
+	let y = d3Scale.scaleLinear()
 		.domain([0, Math.max(nullCount, ...bins.map((d) => d.length))])
 		.range([height - marginBottom, marginTop]);
 
-	let svg = create("svg")
+	let svg = d3Selection.create("svg")
 		.attr("width", width)
 		.attr("height", height)
 		.attr("viewBox", [0, 0, width, height])
 		.attr("style", "max-width: 100%; height: auto; overflow: visible;");
 
-	// background bars for the entire dataset
-	svg.append("g")
-		.attr("fill", "var(--moon-gray)")
-		.selectAll("rect")
-		.data(bins)
-		.join("rect")
-		.attr("x", (d) => x(d.x0) + 1)
-		.attr("width", (d) => x(d.x1) - x(d.x0) - 1)
-		.attr("y", (d) => y(d.length))
-		.attr("height", (d) => y(0) - y(d.length));
+	{
+		// background bars with the "total" bins
+		svg.append("g")
+			.attr("fill", backgroundBarColor)
+			.selectAll("rect")
+			.data(bins)
+			.join("rect")
+			.attr("x", (d) => x(d.x0) + 1.5)
+			.attr("width", (d) => x(d.x1) - x(d.x0) - 1.5)
+			.attr("y", (d) => y(d.length))
+			.attr("height", (d) => y(0) - y(d.length));
+	}
 
 	// Foreground bars for the current subset
-	let foreGrnd = svg
+	let foregroundBarGroup = svg
 		.append("g")
 		.attr("fill", fillColor);
 
-	foreGrnd
-		.selectAll("rect")
-		.data(bins)
-		.join("rect")
-		.attr("x", (d) => x(d.x0) + 1)
-		.attr("width", (d) => x(d.x1) - x(d.x0) - 1)
-		.attr("y", (d) => y(d.length))
-		.attr("height", (d) => y(0) - y(d.length));
+	svg
+		.append("g")
+		.attr("transform", `translate(0,${height - marginBottom})`)
+		.call(
+			d3Axis
+				.axisBottom(x)
+				.tickValues(x.domain())
+				// @ts-expect-error - tickFormat is overloaded
+				.tickFormat(tickFormatterForBins(type, bins))
+				.tickSize(2.5),
+			0, // not sure why this makes TS happy
+		)
+		.call((g) => {
+			g.select(".domain").remove();
+			g.attr("class", "gray");
+			g.selectAll(".tick text")
+				.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
+				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
+		});
 
-	// Add the null bin separately
-	/** @type {{ grp: import("npm:@types/d3-selection").Selection<SVGGElement, undefined, null, undefined>, scale: import("npm:@types/d3-scale").ScaleLinear<number, number> } | undefined} */
-	let nullNode = undefined;
+	/** @type {typeof foregroundBarGroup | undefined} */
+	let foregroundNullGroup = undefined;
 	if (nullCount > 0) {
-		let nullXScale = scaleLinear()
-			.range([marginLeft, marginLeft + avgBinWidth]);
+		let xnull = d3Scale.scaleLinear()
+			.range([marginLeft, marginLeft + nullBinWidth]);
 
 		// background bar for the null bin
 		svg.append("g")
-			.attr("fill", "var(--moon-gray)")
+			.attr("fill", backgroundBarColor)
 			.append("rect")
-			.attr("x", nullXScale(0))
-			.attr("width", nullXScale(1) - nullXScale(0))
+			.attr("x", xnull(0))
+			.attr("width", xnull(1) - xnull(0))
 			.attr("y", y(nullCount))
-			.attr("height", y(0) - y(nullCount))
-			.attr("fill", nullFillColor);
+			.attr("height", y(0) - y(nullCount));
 
-		let nullGrp = svg
+		foregroundNullGroup = svg
 			.append("g")
 			.attr("fill", nullFillColor)
 			.attr("color", nullFillColor);
 
-		nullGrp.append("rect")
-			.attr("x", nullXScale(0))
-			.attr("width", nullXScale(1) - nullXScale(0))
-			.attr("y", y(nullCount))
-			.attr("height", y(0) - y(nullCount))
-			.attr("fill", nullFillColor);
+		foregroundNullGroup.append("rect")
+			.attr("x", xnull(0))
+			.attr("width", xnull(1) - xnull(0));
 
 		// Append the x-axis and add a null tick
-		let grp = nullGrp.append("g")
+		let axisGroup = foregroundNullGroup.append("g")
 			.attr("transform", `translate(0,${height - marginBottom})`)
 			.append("g")
-			.attr("transform", `translate(${nullXScale(0.5)}, 0)`)
+			.attr("transform", `translate(${xnull(0.5)}, 0)`)
 			.attr("class", "tick");
 
-		grp
+		axisGroup
 			.append("line")
 			.attr("stroke", "currentColor")
 			.attr("y2", 2.5);
 
-		grp
+		axisGroup
 			.append("text")
 			.attr("fill", "currentColor")
 			.attr("y", 4.5)
@@ -1616,26 +1654,31 @@ function hist(
 			.attr("font-size", "0.9em")
 			.attr("font-family", "var(--sans-serif)")
 			.attr("font-weight", "normal");
-
-		nullNode = { grp: nullGrp, scale: nullXScale };
 	}
-
-	svg
-		.append("g")
-		.attr("transform", `translate(0,${height - marginBottom})`)
-		.call(xAxis)
-		.call((g) => {
-			g.select(".domain").remove();
-			g.attr("class", "gray");
-			g.selectAll(".tick text")
-				.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
-				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
-		});
 
 	// Apply styles for all axis ticks
 	svg.selectAll(".tick")
 		.attr("font-family", "var(--sans-serif)")
 		.attr("font-weight", "normal");
+
+	/**
+	 * @param {Array<Bin>} bins
+	 * @param {number} nullCount
+	 */
+	function render(bins, nullCount) {
+		foregroundBarGroup
+			.selectAll("rect")
+			.data(bins)
+			.join("rect")
+			.attr("x", (d) => x(d.x0) + 1.5)
+			.attr("width", (d) => x(d.x1) - x(d.x0) - 1.5)
+			.attr("y", (d) => y(d.length))
+			.attr("height", (d) => y(0) - y(d.length));
+		foregroundNullGroup
+			?.select("rect")
+			.attr("y", y(nullCount))
+			.attr("height", y(0) - y(nullCount));
+	}
 
 	let scales = {
 		x: Object.assign(x, {
@@ -1651,6 +1694,8 @@ function hist(
 	};
 	let node = svg.node();
 	assert(node, "Infallable");
+
+	render(bins, nullCount);
 	return Object.assign(node, {
 		/** @param {string} type */
 		scale(type) {
@@ -1664,31 +1709,10 @@ function hist(
 		 * @param {{ nullCount: number }} opts
 		 */
 		update(bins, { nullCount }) {
-			// scales and bins are the same but the values have changed
-			// update the rects
-			bins = [...bins];
-			bins.sort((a, b) => a.x0 - b.x0);
-			foreGrnd
-				.selectAll("rect")
-				.data(bins)
-				.join(
-					(enter) =>
-						enter.append("rect")
-							.attr("x", (d) => x(d.x0) + 1)
-							.attr("width", (d) => x(d.x1) - x(d.x0) - 1)
-							.attr("y", (d) => y(d.length))
-							.attr("height", (d) => y(0) - y(d.length)),
-					(update) =>
-						update
-							.attr("x", (d) => x(d.x0) + 1)
-							.attr("width", (d) => x(d.x1) - x(d.x0) - 1)
-							.attr("y", (d) => y(d.length))
-							.attr("height", (d) => y(0) - y(d.length)),
-				);
-			nullNode?.grp
-				.select("rect")
-				.attr("y", y(nullCount))
-				.attr("height", y(0) - y(nullCount));
+			render(bins, nullCount);
+		},
+		reset() {
+			render(bins, nullCount);
 		},
 	});
 }
