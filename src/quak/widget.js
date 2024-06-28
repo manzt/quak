@@ -245,40 +245,38 @@ class AsyncBatchReader {
 }
 
 class DataTable extends mc.MosaicClient {
-	/** @type {DataTableOptions} */
+	/** @type {DataTableOptions} - source options */
 	#source;
-	/** @type {HTMLElement} */
+	/** @type {HTMLElement} - root element for the component */
 	#root = document.createElement("div");
-	/** @type {ShadowRoot} */
+	/** @type {ShadowRoot} - shadow root for the component */
 	#shadowRoot = this.#root.attachShadow({ mode: "open" });
-	/** @type {HTMLTableSectionElement} */
+	/** @type {HTMLTableSectionElement} - header of the table */
 	#thead = document.createElement("thead");
-	/** @type {HTMLTableSectionElement} */
+	/** @type {HTMLTableSectionElement} - body of the table */
 	#tbody = document.createElement("tbody");
-	/** @type {Array<{ field: string, order: "asc" | "desc" | "unset" }>} */
+	/** @type {Array<{ field: string, order: "asc" | "desc" | "unset" }>} - The SQL order by */
 	#orderby = [];
-
-	/** @type {HTMLTableRowElement | undefined} */
-	#dataRow = undefined;
-	/** @type {HTMLDivElement} */
+	/** @type {HTMLTableRowElement | undefined} - template row for data */
+	#templateRow = undefined;
+	/** @type {HTMLDivElement} - div containing the table */
 	#tableRoot;
-
+	/** @type {number} - offset into the data */
 	#offset = 0;
+	/** @type {number} - number of rows to fetch */
 	#limit = 100;
-
-	pending = false;
-
-	// options
+	/** @type {boolean} - whether an internal request is pending */
+	#pending = false;
+	/** @type {number} - number of rows to display */
 	#rows = 11.5;
+	/** @type {number} - height of a row */
 	#rowHeight = 22;
+	/** @type {number} - width of a column */
 	#columnWidth = 125;
+	/** @type {string} - height of the header */
 	#headerHeight = "50px";
-
-	/** @type {Record<string, string>} */
-	#classes;
-	/** @type {Record<string, (value: any) => string>} */
+	/** @type {Record<string, (value: any) => string>} - the formatter for the data table entries */
 	#format;
-
 	/** @type {AsyncBatchReader<arrow.StructRowProxy> | null} */
 	#reader = null;
 
@@ -286,9 +284,8 @@ class DataTable extends mc.MosaicClient {
 	constructor(source) {
 		super(source.filterBy);
 		this.#source = source;
-		this.#classes = classof(source.schema);
 		this.#format = formatof(source.schema);
-		this.pending = false;
+		this.#pending = false;
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
 		// if maxHeight is set, calculate the number of rows to display
@@ -354,10 +351,10 @@ class DataTable extends mc.MosaicClient {
 
 	/** @param {arrow.Table} data */
 	queryResult(data) {
-		if (!this.pending) {
+		if (!this.#pending) {
 			// data is not from an internal request, so reset table
 			this.#reader = new AsyncBatchReader(() => {
-				this.pending = true;
+				this.#pending = true;
 				this.requestData(this.#offset + this.#limit);
 			});
 			this.#tbody.replaceChildren();
@@ -370,11 +367,11 @@ class DataTable extends mc.MosaicClient {
 	}
 
 	update() {
-		if (!this.pending) {
+		if (!this.#pending) {
 			// on the first update, populate the table with initial data
 			this.#appendRows(this.#rows * 2);
 		}
-		this.pending = false;
+		this.#pending = false;
 		return this;
 	}
 
@@ -391,9 +388,11 @@ class DataTable extends mc.MosaicClient {
 
 	/** @param {Array<Info>} infos */
 	fieldInfo(infos) {
+		let classes = classof(this.#source.schema);
+
 		// @deno-fmt-ignore
-		this.#dataRow = html`<tr><td></td>${
-			infos.map((info) => html.fragment`<td class=${this.#classes[info.column]}></td>`)
+		this.#templateRow = html`<tr><td></td>${
+			infos.map((info) => html.fragment`<td class=${classes[info.column]}></td>`)
 		}
 			<td style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></td>
 		</tr>`;
@@ -498,7 +497,7 @@ class DataTable extends mc.MosaicClient {
 	 * @param {number} i
 	 */
 	#appendRow(d, i) {
-		let itr = this.#dataRow?.cloneNode(true);
+		let itr = this.#templateRow?.cloneNode(true);
 		assert(itr, "Must have a data row");
 		let td = /** @type {HTMLTableCellElement} */ (itr?.childNodes[0]);
 		td.appendChild(document.createTextNode(String(i)));
