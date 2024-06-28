@@ -195,7 +195,7 @@ class AsyncBatchReader {
 	/** @type {(() => void) | null} */
 	#resolve = null;
 	/** @type {{ data: Iterator<T>, last: boolean } | null} */
-	current = null;
+	#current = null;
 	/**
 	 * @param {() => void} requestData - function to request more data. When
 	 * this function completes, it should enqueue the next batch, otherwise the
@@ -210,12 +210,14 @@ class AsyncBatchReader {
 	 */
 	enqueueBatch(batch, { last }) {
 		this.#batches.push({ data: batch, last });
-		this.#resolve?.();
-		this.#resolve = null;
+		if (this.#resolve) {
+			this.#resolve();
+			this.#resolve = null;
+		}
 	}
 	/** @returns {Promise<IteratorResult<{ row: T, index: number }>>} */
 	async next() {
-		if (!this.current) {
+		if (!this.#current) {
 			if (this.#batches.length === 0) {
 				/** @type {Promise<void>} */
 				let promise = new Promise((resolve) => {
@@ -225,14 +227,14 @@ class AsyncBatchReader {
 			}
 			let next = this.#batches.shift();
 			assert(next, "No next batch");
-			this.current = next;
+			this.#current = next;
 		}
-		let result = this.current.data.next();
+		let result = this.#current.data.next();
 		if (result.done) {
-			if (this.current.last) {
+			if (this.#current.last) {
 				return { done: true, value: undefined };
 			}
-			this.current = null;
+			this.#current = null;
 			return this.next();
 		}
 		return {
@@ -253,7 +255,7 @@ class DataTable extends mc.MosaicClient {
 	#thead = document.createElement("thead");
 	/** @type {HTMLTableSectionElement} */
 	#tbody = document.createElement("tbody");
-	/** @type {Array<{ field: string, order: "asc" | "desc" }>} */
+	/** @type {Array<{ field: string, order: "asc" | "desc" | "unset" }>} */
 	#orderby = [];
 
 	/** @type {HTMLTableRowElement | undefined} */
@@ -342,9 +344,9 @@ class DataTable extends mc.MosaicClient {
 			.select(this.#columns)
 			.where(filter)
 			.orderby(
-				this.#orderby.map((o) =>
-					o.order === "asc" ? asc(o.field) : msql.desc(o.field)
-				),
+				this.#orderby
+					.filter((o) => o.order !== "unset")
+					.map((o) => o.order === "asc" ? asc(o.field) : msql.desc(o.field)),
 			)
 			.limit(this.#limit)
 			.offset(this.#offset);
@@ -369,6 +371,7 @@ class DataTable extends mc.MosaicClient {
 
 	update() {
 		if (!this.pending) {
+			// on the first update, populate the table with initial data
 			this.#appendRows(this.#rows * 2);
 		}
 		this.pending = false;
@@ -413,15 +416,6 @@ class DataTable extends mc.MosaicClient {
 		let cols = this.#source.schema.fields.map((field) => {
 			let info = infos.find((c) => c.column === field.name);
 			assert(info, `No info for column ${field.name}`);
-			/** @type {signals.Signal<"unset" | "asc" | "desc">} */
-			let toggle = signals.signal("unset");
-			signals.effect(() => {
-				this.#orderby = getNextOrderby(
-					this.#orderby,
-					field,
-					toggle.value,
-				);
-			});
 			/** @type {ColumnSummaryVis | undefined} */
 			let vis = undefined;
 			if (info.type === "number" || info.type === "date") {
@@ -432,10 +426,19 @@ class DataTable extends mc.MosaicClient {
 					filterBy: this.#source.filterBy,
 				});
 			}
-			let th = thcol(field, this.#columnWidth, toggle, vis);
+			let th = thcol(field, this.#columnWidth, vis);
 			observer.observe(th);
 			return th;
 		});
+
+		signals.effect(() => {
+			this.#orderby = cols.map((col, i) => ({
+				field: this.#columns[i],
+				order: col.sortState.value,
+			}));
+			this.requestData();
+		});
+
 		// @deno-fmt-ignore
 		this.#thead.appendChild(
 			html`<tr style=${{ height: this.#headerHeight }}>
@@ -478,10 +481,9 @@ class DataTable extends mc.MosaicClient {
 	 */
 	async #appendRows(nrows) {
 		nrows = Math.trunc(nrows);
-		assert(this.#reader, "No reader");
 		while (nrows >= 0) {
-			let result = await this.#reader.next();
-			if (result.done) {
+			let result = await this.#reader?.next();
+			if (!result || result?.done) {
 				// we've exhausted all rows
 				break;
 			}
@@ -514,19 +516,6 @@ class DataTable extends mc.MosaicClient {
 		}
 		this.#tbody.append(itr);
 	}
-}
-
-/**
- * @param {Array<{ field: string, order: "asc" | "desc" }>} current
- * @param {arrow.Field} field
- * @param {"asc" | "desc" | "unset"} state
- */
-function getNextOrderby(current, field, state) {
-	let next = current.filter((o) => o.field !== field.name);
-	if (state !== "unset") {
-		next.unshift({ field: field.name, order: state });
-	}
-	return next;
 }
 
 /**
@@ -706,87 +695,16 @@ const TRUNCATE = /** @type {const} */ ({
 	textOverflow: "ellipsis",
 });
 
-class TableRowReader {
-	#index = 0;
-	#offset = 0;
-	#batchSize = 256;
-	/** @type {msql.Query} */
-	#query;
-	/** @type {Coordinator} */
-	#mc;
-	/** @type {arrow.Schema | undefined} */
-	#schema = undefined;
-
-	/**
-	 * @param {Coordinator} mc
-	 * @param {msql.Query} query
-	 */
-	constructor(mc, query) {
-		this.#mc = mc;
-		this.#query = query;
-		/** @type {boolean} */
-		this.done = false;
-	}
-
-	async init() {
-		await this.#readNextBatch();
-	}
-
-	get schema() {
-		assert(this.#schema, "No schema. Did you forget to call init()?");
-		return this.#schema;
-	}
-
-	async #readNextBatch() {
-		let sql = this.#query
-			.clone()
-			.limit(this.#batchSize)
-			.offset(this.#offset);
-		let table = await this.#mc.query(sql);
-		assert(table, "No table");
-		this.#schema = table.schema;
-		this.iter = table[Symbol.iterator]();
-		this.done = table.numRows < this.#batchSize;
-		this.#offset += this.#batchSize;
-	}
-
-	/** @return {IteratorResult<{ kind: "batch"; readNextBatch: () => Promise<void> } | { kind: "row"; data: arrow.StructRowProxy; index: number }>} */
-	next() {
-		if (!this.iter) {
-			return {
-				value: {
-					kind: "batch",
-					readNextBatch: this.#readNextBatch.bind(this),
-				},
-			};
-		}
-		let result = this.iter.next();
-		if (!result.done) {
-			return {
-				value: {
-					kind: "row",
-					data: result.value,
-					index: this.#index++,
-				},
-			};
-		}
-		if (this.done) {
-			return { done: true, value: undefined };
-		}
-		this.iter = undefined;
-		return this.next();
-	}
-}
-
 /**
  * @param {arrow.Field} field
  * @param {number} minWidth
- * @param {signals.Signal<"unset" | "asc" | "desc">} sortState
  * @param {ColumnSummaryVis} [vis]
  */
-function thcol(field, minWidth, sortState, vis) {
+function thcol(field, minWidth, vis) {
 	let buttonVisible = signals.signal(false);
 	let width = signals.signal(minWidth);
+	/** @type {signals.Signal<"unset" | "asc" | "desc">} */
+	let sortState = signals.signal("unset");
 
 	function nextSortState() {
 		// simple state machine
@@ -888,7 +806,7 @@ function thcol(field, minWidth, sortState, vis) {
 		verticalResizeHandle.style.backgroundColor = "transparent";
 	});
 
-	return Object.assign(th, { vis });
+	return Object.assign(th, { vis, sortState });
 }
 
 const STYLES = /*css*/ `\
