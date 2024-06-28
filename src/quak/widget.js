@@ -188,23 +188,29 @@ export default () => {
 
 /** @template T */
 class AsyncBatchReader {
-	/** @type {Array<{ data: Iterator<T>, last: boolean }>} */
+	/** @type {Array<{ data: Iterator<T>, last: boolean }>} - the batches to read */
 	#batches = [];
-	/** @type {number} */
+	/** @type {number} - the index of the current row */
 	#index = 0;
-	/** @type {(() => void) | null} */
+	/** @type {(() => void) | null} - resolves a promisefor when the next batch is available */
 	#resolve = null;
-	/** @type {{ data: Iterator<T>, last: boolean } | null} */
+	/** @type {{ data: Iterator<T>, last: boolean } | null} - the current batch */
 	#current = null;
 	/**
-	 * @param {() => void} requestData - function to request more data. When
+	 * @param {() => void} requestNextBatch - function to request more data. When
 	 * this function completes, it should enqueue the next batch, otherwise the
 	 * reader will be stuck.
 	 */
-	constructor(requestData) {
-		this.requestData = requestData;
+	constructor(requestNextBatch) {
+		this.requestNextBatch = requestNextBatch;
 	}
 	/**
+	 * Enqueue a batch of data
+	 *
+	 * The last batch should have `last: true` set,
+	 * so the reader can terminate when it has
+	 * exhausted all the data.
+	 *
 	 * @param {Iterator<T>} batch
 	 * @param {{ last: boolean }} options
 	 */
