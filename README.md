@@ -1,6 +1,7 @@
 # quak /kwæk/
 
-an [anywidget](https://github.com/manzt/anywidget) for data that talks like a duck
+an [anywidget](https://github.com/manzt/anywidget) for data that talks like a
+duck
 
 ## install
 
@@ -20,9 +21,9 @@ df = pl.read_csv(source)
 quak.Widget(df)
 ```
 
-`quak` is dataframe agnostic, meaning it can be used with any dataframe
-library that supports [Python dataframe interchange
-protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html).
+`quak` is dataframe agnostic, meaning it can be used with any dataframe library
+that supports
+[Python dataframe interchange protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html).
 
 ```python
 import pandas as pd
