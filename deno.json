@@ -1,5 +1,9 @@
 {
-	"lock": true,
+	"lock": false,
+	"tasks": {
+		"build": "deno run -A build.ts",
+		"dev": "deno run -A build.ts --watch"
+	},
 	"compilerOptions": {
 		"allowJs": false,
 		"lib": [

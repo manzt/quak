@@ -1,4 +1,4 @@
-import { assert } from "./util.ts";
+import { assert } from "./assert.ts";
 
 export class AsyncBatchReader<T> {
 	/** the iterable batches to read */
