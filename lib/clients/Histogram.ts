@@ -2,17 +2,22 @@ import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
 
-import type { Channel } from "../types.ts";
+import type { Channel, Mark } from "../types.ts";
 
-interface HistogramClientOptions {
+/** An options bag for the Histogram Mosiac client. */
+interface HistogramOptions {
+	/** The table to query. */
 	table: string;
+	/** The column to use for the histogram. */
 	column: string;
+	/** The type of the column. Must be "number" or "date". */
 	type: "number" | "date";
+	/** A mosaic selection to filter the data. */
 	filterBy?: mc.Selection;
 }
 
-/** @implements {Mark} */
-export class Histogram extends mc.MosaicClient {
+/** Represents a Cross-filtered Histogram */
+export class Histogram extends mc.MosaicClient implements Mark {
 	type = "rectY";
 	/** @type {{ table: string, column: string, type: "number" | "date" }} */
 	#source: { table: string; column: string; type: "number" | "date" };
@@ -27,7 +32,7 @@ export class Histogram extends mc.MosaicClient {
 	/** @type {boolean} */
 	#initialized: boolean = false;
 
-	constructor(options: HistogramClientOptions) {
+	constructor(options: HistogramOptions) {
 		super(options.filterBy);
 		this.#source = options;
 		let process = (channel: string, entry: unknown) => {
@@ -252,4 +257,3 @@ export function markQuery(
 	}
 	return q;
 }
-

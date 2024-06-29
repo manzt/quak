@@ -55,7 +55,7 @@ interface Field {
 /**
  * Representing a visual channel in a visualization.
  */
-interface Channel {
+export interface Channel {
 	as: string;
 	field: Field;
 	channel: string;
