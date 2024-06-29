@@ -186,51 +186,112 @@ export default () => {
  * @property {mc.Selection} [filterBy]
  */
 
+/** @template T */
+class AsyncBatchReader {
+	/** @type {Array<{ data: Iterator<T>, last: boolean }>} - the batches to read */
+	#batches = [];
+	/** @type {number} - the index of the current row */
+	#index = 0;
+	/** @type {(() => void) | null} - resolves a promisefor when the next batch is available */
+	#resolve = null;
+	/** @type {{ data: Iterator<T>, last: boolean } | null} - the current batch */
+	#current = null;
+	/**
+	 * @param {() => void} requestNextBatch - function to request more data. When
+	 * this function completes, it should enqueue the next batch, otherwise the
+	 * reader will be stuck.
+	 */
+	constructor(requestNextBatch) {
+		this.requestNextBatch = requestNextBatch;
+	}
+	/**
+	 * Enqueue a batch of data
+	 *
+	 * The last batch should have `last: true` set,
+	 * so the reader can terminate when it has
+	 * exhausted all the data.
+	 *
+	 * @param {Iterator<T>} batch
+	 * @param {{ last: boolean }} options
+	 */
+	enqueueBatch(batch, { last }) {
+		this.#batches.push({ data: batch, last });
+		if (this.#resolve) {
+			this.#resolve();
+			this.#resolve = null;
+		}
+	}
+	/** @returns {Promise<IteratorResult<{ row: T, index: number }>>} */
+	async next() {
+		if (!this.#current) {
+			if (this.#batches.length === 0) {
+				/** @type {Promise<void>} */
+				let promise = new Promise((resolve) => {
+					this.#resolve = resolve;
+				});
+				await promise;
+			}
+			let next = this.#batches.shift();
+			assert(next, "No next batch");
+			this.#current = next;
+		}
+		let result = this.#current.data.next();
+		if (result.done) {
+			if (this.#current.last) {
+				return { done: true, value: undefined };
+			}
+			this.#current = null;
+			return this.next();
+		}
+		return {
+			done: false,
+			value: { row: result.value, index: this.#index++ },
+		};
+	}
+}
+
 class DataTable extends mc.MosaicClient {
-	/** @type {DataTableOptions} */
+	/** @type {DataTableOptions} - source options */
 	#source;
-	/** @type {HTMLElement} */
+	/** @type {HTMLElement} - root element for the component */
 	#root = document.createElement("div");
-	/** @type {ShadowRoot} */
+	/** @type {ShadowRoot} - shadow root for the component */
 	#shadowRoot = this.#root.attachShadow({ mode: "open" });
-	/** @type {HTMLTableSectionElement} */
+	/** @type {HTMLTableSectionElement} - header of the table */
 	#thead = document.createElement("thead");
-	/** @type {HTMLTableSectionElement} */
+	/** @type {HTMLTableSectionElement} - body of the table */
 	#tbody = document.createElement("tbody");
-	/** @type {Array<{ field: string, order: "asc" | "desc" }>} */
+	/** @type {Array<{ field: string, order: "asc" | "desc" | "unset" }>} - The SQL order by */
 	#orderby = [];
-
-	/** @type {TableRowReader | undefined} */
-	#reader = undefined;
-	/** @type {HTMLTableRowElement | undefined} */
-	#dataRow = undefined;
-	/** @type {HTMLDivElement} */
+	/** @type {HTMLTableRowElement | undefined} - template row for data */
+	#templateRow = undefined;
+	/** @type {HTMLDivElement} - div containing the table */
 	#tableRoot;
-
+	/** @type {number} - offset into the data */
 	#offset = 0;
+	/** @type {number} - number of rows to fetch */
 	#limit = 100;
-
-	// options
+	/** @type {boolean} - whether an internal request is pending */
+	#pending = false;
+	/** @type {number} - number of rows to display */
 	#rows = 11.5;
+	/** @type {number} - height of a row */
 	#rowHeight = 22;
+	/** @type {number} - width of a column */
 	#columnWidth = 125;
+	/** @type {string} - height of the header */
 	#headerHeight = "50px";
-	#refreshTableBody = async () => {};
-
-	/** @type {Record<string, string>} */
-	#classes;
-	/** @type {Record<string, (value: any) => string>} */
+	/** @type {Record<string, (value: any) => string>} - the formatter for the data table entries */
 	#format;
-
-	/** @type {{ field: string, order: "asc" | "desc" } | null} */
-	#sort = null;
+	/** @type {AsyncBatchReader<arrow.StructRowProxy> | null} */
+	#reader = null;
 
 	/** @param {DataTableOptions} source */
 	constructor(source) {
 		super(source.filterBy);
 		this.#source = source;
-		this.#classes = classof(source.schema);
 		this.#format = formatof(source.schema);
+		this.#pending = false;
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
 		// if maxHeight is set, calculate the number of rows to display
@@ -286,18 +347,37 @@ class DataTable extends mc.MosaicClient {
 			.select(this.#columns)
 			.where(filter)
 			.orderby(
-				this.#orderby.map((o) =>
-					o.order === "asc" ? asc(o.field) : msql.desc(o.field)
-				),
+				this.#orderby
+					.filter((o) => o.order !== "unset")
+					.map((o) => o.order === "asc" ? asc(o.field) : msql.desc(o.field)),
 			)
 			.limit(this.#limit)
 			.offset(this.#offset);
 	}
 
+	/** @param {arrow.Table} data */
 	queryResult(data) {
-		console.log("QUERY RESULT");
-		console.log(data);
+		if (!this.#pending) {
+			// data is not from an internal request, so reset table
+			this.#reader = new AsyncBatchReader(() => {
+				this.#pending = true;
+				this.requestData(this.#offset + this.#limit);
+			});
+			this.#tbody.replaceChildren();
+			this.offset = 0;
+		}
+		this.#reader?.enqueueBatch(data[Symbol.iterator](), {
+			last: data.numRows < this.#limit,
+		});
+		return this;
+	}
 
+	update() {
+		if (!this.#pending) {
+			// on the first update, populate the table with initial data
+			this.#appendRows(this.#rows * 2);
+		}
+		this.#pending = false;
 		return this;
 	}
 
@@ -312,29 +392,13 @@ class DataTable extends mc.MosaicClient {
 		this.coordinator.prefetch(query.clone().offset(offset + this.#limit));
 	}
 
-	async #createRowReader() {
-		/** @type {Coordinator} */
-		let coordinator = this.coordinator;
-		let query = msql.Query
-			.from(this.#source.table)
-			.select(...this.#columns);
-		if (this.#orderby.length) {
-			query.orderby(
-				...this.#orderby.map((o) =>
-					o.order === "asc" ? asc(o.field) : msql.desc(o.field)
-				),
-			);
-		}
-		let reader = new TableRowReader(coordinator, query);
-		await reader.init();
-		return reader;
-	}
-
 	/** @param {Array<Info>} infos */
 	fieldInfo(infos) {
+		let classes = classof(this.#source.schema);
+
 		// @deno-fmt-ignore
-		this.#dataRow = html`<tr><td></td>${
-			infos.map((info) => html.fragment`<td class=${this.#classes[info.column]}></td>`)
+		this.#templateRow = html`<tr><td></td>${
+			infos.map((info) => html.fragment`<td class=${classes[info.column]}></td>`)
 		}
 			<td style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></td>
 		</tr>`;
@@ -357,16 +421,6 @@ class DataTable extends mc.MosaicClient {
 		let cols = this.#source.schema.fields.map((field) => {
 			let info = infos.find((c) => c.column === field.name);
 			assert(info, `No info for column ${field.name}`);
-			/** @type {signals.Signal<"unset" | "asc" | "desc">} */
-			let toggle = signals.signal("unset");
-			signals.effect(() => {
-				this.#orderby = getNextOrderby(
-					this.#orderby,
-					field,
-					toggle.value,
-				);
-				this.#refreshTableBody();
-			});
 			/** @type {ColumnSummaryVis | undefined} */
 			let vis = undefined;
 			if (info.type === "number" || info.type === "date") {
@@ -377,10 +431,19 @@ class DataTable extends mc.MosaicClient {
 					filterBy: this.#source.filterBy,
 				});
 			}
-			let th = thcol(field, this.#columnWidth, toggle, vis);
+			let th = thcol(field, this.#columnWidth, vis);
 			observer.observe(th);
 			return th;
 		});
+
+		signals.effect(() => {
+			this.#orderby = cols.map((col, i) => ({
+				field: this.#columns[i],
+				order: col.sortState.value,
+			}));
+			this.requestData();
+		});
+
 		// @deno-fmt-ignore
 		this.#thead.appendChild(
 			html`<tr style=${{ height: this.#headerHeight }}>
@@ -414,15 +477,6 @@ class DataTable extends mc.MosaicClient {
 			});
 		}
 
-		// we need to put down here so the first effect can run and not exhaust the reader
-		this.#refreshTableBody = async () => {
-			this.#reader = await this.#createRowReader();
-			this.#tbody.replaceChildren();
-			this.#tableRoot.scrollTop = 0;
-			this.#appendRows(this.#rows * 2);
-		};
-
-		this.#refreshTableBody();
 		return this;
 	}
 
@@ -432,22 +486,15 @@ class DataTable extends mc.MosaicClient {
 	 */
 	async #appendRows(nrows) {
 		nrows = Math.trunc(nrows);
-		assert(this.#reader, "No reader");
 		while (nrows >= 0) {
-			let result = this.#reader.next();
-			if (result.done) {
+			let result = await this.#reader?.next();
+			if (!result || result?.done) {
 				// we've exhausted all rows
 				break;
 			}
-			if (result.value.kind === "row") {
-				this.#appendRow(result.value.data, result.value.index);
-				nrows--;
-				continue;
-			}
-			if (result.value.kind === "batch") {
-				await result.value.readNextBatch();
-				continue;
-			}
+			this.#appendRow(result.value.row, result.value.index);
+			nrows--;
+			continue;
 		}
 	}
 
@@ -456,7 +503,7 @@ class DataTable extends mc.MosaicClient {
 	 * @param {number} i
 	 */
 	#appendRow(d, i) {
-		let itr = this.#dataRow?.cloneNode(true);
+		let itr = this.#templateRow?.cloneNode(true);
 		assert(itr, "Must have a data row");
 		let td = /** @type {HTMLTableCellElement} */ (itr?.childNodes[0]);
 		td.appendChild(document.createTextNode(String(i)));
@@ -474,19 +521,6 @@ class DataTable extends mc.MosaicClient {
 		}
 		this.#tbody.append(itr);
 	}
-}
-
-/**
- * @param {Array<{ field: string, order: "asc" | "desc" }>} current
- * @param {arrow.Field} field
- * @param {"asc" | "desc" | "unset"} state
- */
-function getNextOrderby(current, field, state) {
-	let next = current.filter((o) => o.field !== field.name);
-	if (state !== "unset") {
-		next.unshift({ field: field.name, order: state });
-	}
-	return next;
 }
 
 /**
@@ -666,87 +700,16 @@ const TRUNCATE = /** @type {const} */ ({
 	textOverflow: "ellipsis",
 });
 
-class TableRowReader {
-	#index = 0;
-	#offset = 0;
-	#batchSize = 256;
-	/** @type {msql.Query} */
-	#query;
-	/** @type {Coordinator} */
-	#mc;
-	/** @type {arrow.Schema | undefined} */
-	#schema = undefined;
-
-	/**
-	 * @param {Coordinator} mc
-	 * @param {msql.Query} query
-	 */
-	constructor(mc, query) {
-		this.#mc = mc;
-		this.#query = query;
-		/** @type {boolean} */
-		this.done = false;
-	}
-
-	async init() {
-		await this.#readNextBatch();
-	}
-
-	get schema() {
-		assert(this.#schema, "No schema. Did you forget to call init()?");
-		return this.#schema;
-	}
-
-	async #readNextBatch() {
-		let sql = this.#query
-			.clone()
-			.limit(this.#batchSize)
-			.offset(this.#offset);
-		let table = await this.#mc.query(sql);
-		assert(table, "No table");
-		this.#schema = table.schema;
-		this.iter = table[Symbol.iterator]();
-		this.done = table.numRows < this.#batchSize;
-		this.#offset += this.#batchSize;
-	}
-
-	/** @return {IteratorResult<{ kind: "batch"; readNextBatch: () => Promise<void> } | { kind: "row"; data: arrow.StructRowProxy; index: number }>} */
-	next() {
-		if (!this.iter) {
-			return {
-				value: {
-					kind: "batch",
-					readNextBatch: this.#readNextBatch.bind(this),
-				},
-			};
-		}
-		let result = this.iter.next();
-		if (!result.done) {
-			return {
-				value: {
-					kind: "row",
-					data: result.value,
-					index: this.#index++,
-				},
-			};
-		}
-		if (this.done) {
-			return { done: true, value: undefined };
-		}
-		this.iter = undefined;
-		return this.next();
-	}
-}
-
 /**
  * @param {arrow.Field} field
  * @param {number} minWidth
- * @param {signals.Signal<"unset" | "asc" | "desc">} sortState
  * @param {ColumnSummaryVis} [vis]
  */
-function thcol(field, minWidth, sortState, vis) {
+function thcol(field, minWidth, vis) {
 	let buttonVisible = signals.signal(false);
 	let width = signals.signal(minWidth);
+	/** @type {signals.Signal<"unset" | "asc" | "desc">} */
+	let sortState = signals.signal("unset");
 
 	function nextSortState() {
 		// simple state machine
@@ -848,7 +811,7 @@ function thcol(field, minWidth, sortState, vis) {
 		verticalResizeHandle.style.backgroundColor = "transparent";
 	});
 
-	return Object.assign(th, { vis });
+	return Object.assign(th, { vis, sortState });
 }
 
 const STYLES = /*css*/ `\
