@@ -1,6 +1,7 @@
 import * as d3 from "../deps.ts";
 import { Bin, Scale } from "../types.ts";
 import { assert } from "../utils/assert.ts";
+import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
 
 interface HistogramOptions {
 	type: "number" | "date";
@@ -92,6 +93,7 @@ export function CrossfilterHistogramPlot(
 				// @ts-expect-error - tickFormat is overloaded
 				.tickFormat(tickFormatterForBins(type, bins))
 				.tickSize(2.5),
+			0,
 		)
 		.call((g) => {
 			g.select(".domain").remove();
