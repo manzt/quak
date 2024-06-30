@@ -54,7 +54,7 @@ let formatMap = {
 export function tickFormatterForBins(
 	type: "date" | "number",
 	bins: Array<Bin>,
-) {
+): (d: d3.NumberValue) => string {
 	if (type === "number") {
 		return d3.format("~s");
 	}
@@ -63,6 +63,7 @@ export function tickFormatterForBins(
 		bins[bins.length - 1].x1,
 		bins.length,
 	);
+	// @ts-expect-error - d3 ok with date -> string as long as it's utc
 	return formatMap[interval.interval];
 }
 

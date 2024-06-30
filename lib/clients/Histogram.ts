@@ -1,12 +1,14 @@
+// @deno-types="../mosaic-core.d.ts";
 import * as mc from "@uwdata/mosaic-core";
-import * as msql from "@uwdata/mosaic-sql";
+// @deno-types="../mosaic-sql.d.ts";
+import { count, Query, Ref } from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
 import type * as arrow from "apache-arrow";
 
 import { assert } from "../utils/assert.ts";
 import { CrossfilterHistogramPlot } from "../utils/CrossfilterHistogramPlot.ts";
 
-import type { Bin, Channel, Field, Mark, Scale } from "../types.ts";
+import type { Bin, Channel, Field, Info, Mark, Scale } from "../types.ts";
 
 /** An options bag for the Histogram Mosiac client. */
 interface HistogramOptions {
@@ -23,19 +25,13 @@ interface HistogramOptions {
 /** Represents a Cross-filtered Histogram */
 export class Histogram extends mc.MosaicClient implements Mark {
 	type = "rectY";
-	/** @type {{ table: string, column: string, type: "number" | "date" }} */
 	#source: { table: string; column: string; type: "number" | "date" };
-	/** @type {HTMLElement} */
 	#el: HTMLElement = document.createElement("div");
-	/** @type {Array<Channel>} */
 	#channels: Array<Channel> = [];
-	/** @type {Set<unknown>} */
 	#markSet: Set<unknown> = new Set();
-	/** @type {mplot.Interval1D | undefined} */
 	#interval: mplot.Interval1D | undefined = undefined;
-	/** @type {boolean} */
 	#initialized: boolean = false;
-
+	#fieldInfo: boolean = false;
 	svg:
 		| SVGSVGElement & {
 			scale: (type: string) => Scale<number, number>;
@@ -60,7 +56,7 @@ export class Histogram extends mc.MosaicClient implements Mark {
 		};
 		let encodings = {
 			x: mplot.bin(options.column),
-			y: msql.count(),
+			y: count(),
 		};
 		for (let [channel, entry] of Object.entries(encodings)) {
 			process(channel, entry);
@@ -75,9 +71,7 @@ export class Histogram extends mc.MosaicClient implements Mark {
 		}
 	}
 
-	/** @returns {Array<{ table: string, column: string, stats: Array<string> }>} */
-	// @ts-expect-error - _field type is bad from MosaicClient
-	fields(): Array<{ table: string; column: string; stats: Array<string> }> {
+	fields() {
 		const fields = new Map();
 		for (let { field } of this.#channels) {
 			if (!field) continue;
@@ -96,7 +90,6 @@ export class Histogram extends mc.MosaicClient implements Mark {
 		);
 	}
 
-	/** @param {Array<Info>} info */
 	fieldInfo(info: Array<Info>) {
 		let lookup = Object.fromEntries(info.map((x) => [x.column, x]));
 		for (let entry of this.#channels) {
@@ -105,7 +98,7 @@ export class Histogram extends mc.MosaicClient implements Mark {
 				Object.assign(entry, lookup[field.stats?.column ?? field]);
 			}
 		}
-		this._fieldInfo = true;
+		this.#fieldInfo = true;
 		return this;
 	}
 
@@ -132,15 +125,15 @@ export class Histogram extends mc.MosaicClient implements Mark {
 	}
 
 	hasFieldInfo() {
-		return !!this._fieldInfo;
+		return !!this.#fieldInfo;
 	}
 
 	/**
 	 * Return a query specifying the data needed by this Mark client.
-	 * @param {*} [filter] The filtering criteria to apply in the query.
-	 * @returns {*} The client query
+	 * @param filter The filtering criteria to apply in the query.
+	 * @returns The client query
 	 */
-	query(filter: any = []): any {
+	query(filter?: Array<unknown>): Query {
 		return markQuery(this.#channels, this.#source.table).where(filter);
 	}
 
@@ -197,7 +190,7 @@ function fieldEntry(channel: string, field: Field): Channel {
 	return {
 		channel,
 		field,
-		as: field instanceof msql.Ref ? field.column : channel,
+		as: field instanceof Ref ? field.column : channel,
 	};
 }
 
@@ -242,8 +235,8 @@ export function markQuery(
 	channels: Array<Channel>,
 	table: string,
 	skip: Array<string> = [],
-): msql.Query {
-	let q = msql.Query.from({ source: table });
+): Query {
+	let q = Query.from({ source: table });
 	let dims = new Set();
 	let aggr = false;
 

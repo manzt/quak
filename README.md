@@ -11,8 +11,8 @@ pip install quak
 
 ## usage
 
-The easiest way to get started with `quak` is using the IPython [cell
-magic](https://ipython.readthedocs.io/en/stable/interactive/magics.html).
+The easiest way to get started with `quak` is using the IPython
+[cell magic](https://ipython.readthedocs.io/en/stable/interactive/magics.html).
 
 ```python
 %load_ext quak
@@ -43,10 +43,11 @@ that supports
 
 ## development
 
-Development of `quak` requires both `rye` (for Python) and `deno` (for TypeScript).
+Development of `quak` requires both `rye` (for Python) and `deno` (for
+TypeScript).
 
-If you want to prototype with the Python notebook examples, you will need to start
-the Deno build script in development mode:
+If you want to prototype with the Python notebook examples, you will need to
+start the Deno build script in development mode:
 
 ```sh
 deno task dev

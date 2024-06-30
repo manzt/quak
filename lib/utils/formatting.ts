@@ -48,6 +48,7 @@ export function formatDataTypeName(type: arrow.DataType) {
  */
 export function formatterForDataTypeValue(
 	type: arrow.DataType,
+	// deno-lint-ignore no-explicit-any
 ): (value: any) => string {
 	if (arrow.DataType.isNull(type)) {
 		return fmt(type.TValue, stringify);

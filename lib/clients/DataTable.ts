@@ -1,6 +1,9 @@
 import * as arrow from "apache-arrow";
+
+// @deno-types="../mosaic-core.d.ts"
 import * as mc from "@uwdata/mosaic-core";
-import * as msql from "@uwdata/mosaic-sql";
+// @deno-types="../mosaic-sql.d.ts"
+import { desc, Query, SQLExpression } from "@uwdata/mosaic-sql";
 import * as signals from "@preact/signals-core";
 import { html } from "htl";
 
@@ -116,13 +119,13 @@ export class DataTable extends mc.MosaicClient {
 	 * @param {Array<unknown>} filter
 	 */
 	query(filter: Array<unknown> = []) {
-		return msql.Query.from(this.#source.table)
+		return Query.from(this.#source.table)
 			.select(this.#columns)
 			.where(filter)
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
-					.map((o) => o.order === "asc" ? asc(o.field) : msql.desc(o.field)),
+					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
 			)
 			.limit(this.#limit)
 			.offset(this.#offset);
@@ -180,9 +183,8 @@ export class DataTable extends mc.MosaicClient {
 
 		let observer = new IntersectionObserver((entries) => {
 			for (let entry of entries) {
-				/** @type {ColumnSummaryClient | undefined} */
-				let vis: ColumnSummaryClient | undefined =
-					/** @type {any} */ (entry.target).vis;
+				if (!isTableColumnHeaderWithSvg(entry.target)) continue;
+				let vis = entry.target.vis;
 				if (!vis) continue;
 				if (entry.isIntersecting) {
 					this.coordinator.connect(vis);
@@ -604,18 +606,25 @@ function shouldGrayoutValue(value: string) {
 	);
 }
 
+function isTableColumnHeaderWithSvg(
+	node: unknown,
+): node is ReturnType<typeof thcol> {
+	return node instanceof HTMLTableCellElement && "vis" in node;
+}
+
 /**
  * A mosaic SQL expression for ascending order
  *
  * The normal behavior in SQL is to sort nulls first when sorting in ascending order.
  * This function returns an expression that sorts nulls last (i.e., `NULLS LAST`),
- * like the `msql.desc` function.
+ * like the `desc` function.
  *
  * @param field
  */
-function asc(field: string): msql.Expr {
+function asc(field: string): SQLExpression {
 	// doesn't sort nulls for asc
-	let expr = msql.desc(field);
+	let expr = desc(field);
+	// @ts-expect-error - private field
 	expr._expr[0] = expr._expr[0].replace("DESC", "ASC");
 	return expr;
 }
