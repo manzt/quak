@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  LintPython:
+    name: Python / Lint
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: eifinger/setup-rye@v3
+        with:
+          version: 'latest'
+      - run: |
+          rye fmt --check
+          rye lint
+
+  LintJavaScript:
+    name: JavaScript / Lint
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - run: |
+          deno lint
+          deno fmt --check
+          deno lint
+
+  TypecheckJavaScript:
+    name: JavaScript / Typecheck
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - run: |
+          deno task typecheck

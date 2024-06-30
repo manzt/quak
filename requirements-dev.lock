@@ -122,12 +122,10 @@ jupyter-server==2.14.1
 jupyter-server-terminals==0.5.3
     # via jupyter-server
 jupyterlab==4.2.2
-    # via jupyterlab-vim
 jupyterlab-pygments==0.3.0
     # via nbconvert
 jupyterlab-server==2.27.2
     # via jupyterlab
-jupyterlab-vim==4.1.3
 jupyterlab-widgets==3.0.11
     # via ipywidgets
 markupsafe==2.1.5
@@ -138,8 +136,6 @@ matplotlib-inline==0.1.7
     # via ipython
 mistune==3.0.2
     # via nbconvert
-msgspec==0.18.6
-    # via quak
 nbclient==0.10.0
     # via nbconvert
 nbconvert==7.16.4

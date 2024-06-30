@@ -31,8 +31,6 @@ jupyterlab-widgets==3.0.11
     # via ipywidgets
 matplotlib-inline==0.1.7
     # via ipython
-msgspec==0.18.6
-    # via quak
 numpy==2.0.0
     # via pyarrow
 parso==0.8.4
