@@ -18,6 +18,7 @@ let options: esbuild.BuildOptions = {
 	bundle: true,
 	format: "esm",
 	sourcemap: "inline",
+	loader: { ".css": "text" },
 	logLevel: "info",
 };
 
