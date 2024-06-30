@@ -9,3 +9,4 @@ __pycache__
 data/
 
 ./src/quak/widget.js
+.vite/

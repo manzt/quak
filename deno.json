@@ -1,8 +1,9 @@
 {
 	"lock": false,
 	"tasks": {
-		"build": "deno run -A build.ts",
-		"dev": "deno run -A build.ts --watch"
+		"build": "deno run -A scripts/build.ts",
+		"dev": "deno run -A scripts/build.ts --watch",
+		"vite": "deno run -A scripts/vite-dev.ts"
 	},
 	"compilerOptions": {
 		"allowJs": false,
@@ -30,12 +31,12 @@
 	},
 	"fmt": {
 		"useTabs": true,
-		"exclude": [".venv"]
+		"exclude": [".venv", "src"]
 	},
 	"lint": {
 		"rules": {
 			"exclude": ["prefer-const"]
 		},
-		"exclude": [".venv"]
+		"exclude": [".venv", "src"]
 	}
 }
