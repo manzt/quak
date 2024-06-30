@@ -1,5 +1,5 @@
 // @deno-types="../deps/mosaic-core.d.ts";
-import { MosaicClient, type Selection } from "@uwdata/mosaic-core";
+import { type Info, MosaicClient, type Selection } from "@uwdata/mosaic-core";
 // @deno-types="../deps/mosaic-sql.d.ts";
 import { count, Query, Ref } from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
@@ -8,7 +8,7 @@ import type * as arrow from "apache-arrow";
 import { assert } from "../utils/assert.ts";
 import { CrossfilterHistogramPlot } from "../utils/CrossfilterHistogramPlot.ts";
 
-import type { Bin, Channel, Field, Info, Mark, Scale } from "../types.ts";
+import type { Bin, Channel, CompleteField, Mark, Scale } from "../types.ts";
 
 /** An options bag for the Histogram Mosiac client. */
 interface HistogramOptions {
@@ -183,10 +183,10 @@ export class Histogram extends MosaicClient implements Mark {
 
 /**
  * @param {string} channel
- * @param {Field} field
+ * @param {CompleteField} field
  * @returns {Channel}
  */
-function fieldEntry(channel: string, field: Field): Channel {
+function fieldEntry(channel: string, field: CompleteField): Channel {
 	return {
 		channel,
 		field,
@@ -197,9 +197,12 @@ function fieldEntry(channel: string, field: Field): Channel {
 /**
  * @param {string} channel
  * @param {unknown} field
- * @returns {field is Field}
+ * @returns {field is CompleteField}
  */
-function isFieldObject(channel: string, field: unknown): field is Field {
+function isFieldObject(
+	channel: string,
+	field: unknown,
+): field is CompleteField {
 	if (channel === "sort" || channel === "tip") {
 		return false;
 	}
@@ -212,11 +215,11 @@ function isFieldObject(channel: string, field: unknown): field is Field {
 
 /**
  * @param {unknown} x
- * @returns {x is (mark: Mark, channel: string) => Record<string, Field>}
+ * @returns {x is (mark: Mark, channel: string) => Record<string, CompleteField>}
  */
 function isTransform(
 	x: unknown,
-): x is (mark: Mark, channel: string) => Record<string, Field> {
+): x is (mark: Mark, channel: string) => Record<string, CompleteField> {
 	return typeof x === "function";
 }
 

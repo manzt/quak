@@ -4,45 +4,20 @@ export interface Bin {
 	length: number;
 }
 
-/** Missing Mosaic types */
+// TODO: Request mosaic to expose some of these things outside of vgplot?
+//
+// NB: These type are mostly used on the Histogram client, which loosely
+// mimics the `vgplot.Mark` client. We just don't need all the extra things in
+// vgplot (mainly Plot iself) for our use case so some of that code
+// is vendored in the repo.
 
 /**
- * The information about a table column.
- *
- * Requested by specifying `fields()` on a mosaic client,
- * and eventually returned into `fieldInfo(infos)` on the same
- * client by the Coordinator.
- */
-export interface Info {
-	/** The name of the column. */
-	column: string;
-	/** The column data type as JavaScript primitive (e.g. "string", "number"). */
-	type: string;
-	/** Whether the column is nullable. */
-	nullable: boolean;
-	/** The corresponding SQL data type. */
-	sqlType: string;
-	/** The table name */
-	table: string;
-	/** The min value for the column. Only present if requested in `fields()` */
-	min?: number;
-	/** The max value for the column. Only present if requested in `fields()` */
-	max?: number;
-	/** The number of distinct values for the column. Only present if requested in `fields()` */
-	distinct?: number;
-}
-
-// These are used on the Histogram client, which is close to a Mosaic Mark
-// client. We just don't need all the extra things in vgplot (mainly Plot
-// iself).
-
-/**
- * Represents a field in a mosaic query.
- *
  * TODO(Trevor): To be honest I don't really know what all the types are.
+ *
+ * My understanding is that this is an extension of the `fields()`
+ * returned by a MosiacClient.
  */
-export interface Field {
-	/** The name of the column. */
+export interface CompleteField {
 	column: string;
 	label: string;
 	columns: string[];
@@ -57,7 +32,7 @@ export interface Field {
  */
 export interface Channel {
 	as: string;
-	field: Field;
+	field: CompleteField;
 	channel: string;
 	type?: string;
 	value?: number;

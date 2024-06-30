@@ -79,10 +79,8 @@ rye lint
 rye format
 ```
 
-> [!Note] Why the weird TypeScript stuff? In my experience, the hybrid
-> Python/JS repos are usually not that nice to work on once you add add npm and
-> `node_modules`. However, I want type-checking, linting, and formatting for
-> the front-end source code. Deno is a nice alternative because you get all those
-> things just by having a `deno.json` - and we can write little scripts to do
-> the stuff like resolving modules.
-
+> [!NOTE]
+> Why the weird TypeScript stuff? In practice, hybrid Python/JS repos get messy
+> with npm and `node_modules`. With Deno there is no `node_modules`, and the
+> tool handles type-checking, linting, and formatting. The extra build scripts
+> serve to make nice development ergonamics within and outside of Jupyter.

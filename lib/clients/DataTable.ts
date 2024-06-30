@@ -1,6 +1,11 @@
 import * as arrow from "apache-arrow";
 // @deno-types="../deps/mosaic-core.d.ts"
-import { MosaicClient, type Selection } from "@uwdata/mosaic-core";
+import {
+	type FieldRequest,
+	type Info,
+	MosaicClient,
+	type Selection,
+} from "@uwdata/mosaic-core";
 // @deno-types="../deps/mosaic-sql.d.ts"
 import { desc, Query, SQLExpression } from "@uwdata/mosaic-sql";
 import * as signals from "@preact/signals-core";
@@ -12,8 +17,6 @@ import { formatDataType, formatterForValue } from "../utils/formatting.ts";
 import { Histogram } from "./Histogram.ts";
 
 import stylesString from "./DataTable.css?raw";
-
-import type { Info } from "../types.ts";
 
 interface DataTableOptions {
 	table: string;
@@ -97,7 +100,7 @@ export class DataTable extends MosaicClient {
 		});
 	}
 
-	fields(): Array<{ table: string; column: string; stats: Array<string> }> {
+	fields(): Array<FieldRequest> {
 		return this.#columns.map((column) => ({
 			table: this.#source.table,
 			column,
