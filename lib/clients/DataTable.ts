@@ -123,9 +123,7 @@ export class DataTable extends MosaicClient {
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
-					.map((o) =>
-						o.order === "asc" ? asc(o.field) : desc(o.field)
-					),
+					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
 			)
 			.limit(this.#limit)
 			.offset(this.#offset);
@@ -350,9 +348,7 @@ function thcol(
 	});
 
 	signals.effect(() => {
-		sortButton.style.visibility = buttonVisible.value
-			? "visible"
-			: "hidden";
+		sortButton.style.visibility = buttonVisible.value ? "visible" : "hidden";
 	});
 
 	signals.effect(() => {
