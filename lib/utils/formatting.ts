@@ -26,7 +26,7 @@ function stringify(x: unknown): string {
 }
 
 /** @param {arrow.DataType} type */
-export function formatDataTypeName(type: arrow.DataType) {
+export function formatDataType(type: arrow.DataType) {
 	// special case some types
 	if (arrow.DataType.isLargeBinary(type)) return "large binary";
 	if (arrow.DataType.isLargeUtf8(type)) return "large utf8";
@@ -46,7 +46,7 @@ export function formatDataTypeName(type: arrow.DataType) {
  * @param {arrow.DataType} type
  * @returns {(value: any) => string}
  */
-export function formatterForDataTypeValue(
+export function formatterForValue(
 	type: arrow.DataType,
 	// deno-lint-ignore no-explicit-any
 ): (value: any) => string {
@@ -171,7 +171,7 @@ export function formatterForDataTypeValue(
 	}
 
 	if (arrow.DataType.isDictionary(type)) {
-		let formatter = formatterForDataTypeValue(type.dictionary);
+		let formatter = formatterForValue(type.dictionary);
 		return fmt(type.TValue, formatter);
 	}
 

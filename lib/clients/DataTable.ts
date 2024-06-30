@@ -9,13 +9,10 @@ import { html } from "htl";
 
 import { AsyncBatchReader } from "../utils/AsyncBatchReader.ts";
 import { assert } from "../utils/assert.ts";
-import {
-	formatDataTypeName,
-	formatterForDataTypeValue,
-} from "../utils/formatting.ts";
-
+import { formatDataType, formatterForValue } from "../utils/formatting.ts";
 import { Histogram } from "./Histogram.ts";
-import { Info } from "../types.ts";
+
+import type { Info } from "../types.ts";
 
 interface DataTableOptions {
 	table: string;
@@ -125,7 +122,9 @@ export class DataTable extends MosaicClient {
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
-					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
+					.map((o) =>
+						o.order === "asc" ? asc(o.field) : desc(o.field)
+					),
 			)
 			.limit(this.#limit)
 			.offset(this.#offset);
@@ -337,7 +336,7 @@ function thcol(
 			${sortButton}
 		</div>
 		${verticalResizeHandle}
-		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px", userSelect: "none" }}>${formatDataTypeName(field.type)}</span>
+		<span class="gray" style=${{ fontWeight: 400, fontSize: "12px", userSelect: "none" }}>${formatDataType(field.type)}</span>
 		${vis?.plot?.node()}
 	</th>`;
 
@@ -350,7 +349,9 @@ function thcol(
 	});
 
 	signals.effect(() => {
-		sortButton.style.visibility = buttonVisible.value ? "visible" : "hidden";
+		sortButton.style.visibility = buttonVisible.value
+			? "visible"
+			: "hidden";
 	});
 
 	signals.effect(() => {
@@ -548,7 +549,7 @@ function formatof(schema: arrow.Schema) {
 		null,
 	);
 	for (const field of schema.fields) {
-		format[field.name] = formatterForDataTypeValue(field.type);
+		format[field.name] = formatterForValue(field.type);
 	}
 	return format;
 }
