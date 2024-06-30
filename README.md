@@ -78,3 +78,11 @@ deno task typecheck
 rye lint
 rye format
 ```
+
+> [!Note] Why the weird TypeScript stuff? In my experience, the hybrid
+> Python/JS repos are usually not that nice to work on once you add add npm and
+> `node_modules`. However, I want type-checking, linting, and formatting for
+> the front-end source code. Deno is a nice alternative because you get all those
+> things just by having a `deno.json` - and we can write little scripts to do
+> the stuff like resolving modules.
+

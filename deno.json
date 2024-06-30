@@ -3,7 +3,7 @@
 	"tasks": {
 		"build": "deno run -A scripts/build.ts",
 		"dev": "deno run -A scripts/build.ts --watch",
-		"vite": "deno run -A scripts/vite-dev.ts",
+		"vite": "deno run -A npm:vite -c scripts/vite.config.mts",
 		"typecheck": "deno check lib/widget.ts"
 	},
 	"compilerOptions": {
