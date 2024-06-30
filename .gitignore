@@ -8,5 +8,4 @@ __pycache__
 .ipynb_checkpoints
 data/
 
-./src/quak/widget.js
 .vite/
