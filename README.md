@@ -11,7 +11,7 @@ pip install quak
 
 ## usage
 
-The easiest way to get started with `quak` is using the IPython
+The easiest way to get started with **quak** is using the IPython
 [cell magic](https://ipython.readthedocs.io/en/stable/interactive/magics.html).
 
 ```python
@@ -25,8 +25,10 @@ df = pd.read_csv("https://raw.githubusercontent.com/vega/vega-datasets/main/data
 df
 ```
 
-Any cell that returns an object implementing the `__dataframe__` API will be
-rendered using `quak.Widget`, rather than the default renderer.
+Any cell that returns an object implementing the [Python dataframe interchange
+protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html)
+(i.e., a dataframe-like "thing") will be rendered using `quak.Widget`, rather
+than the default renderer.
 
 Alternatively, you can use `quak.Widget` directly:
 
@@ -36,10 +38,6 @@ import polars as pl
 df = pl.read_csv("https://raw.githubusercontent.com/vega/vega-datasets/main/data/airports.csv")
 quak.Widget(df)
 ```
-
-`quak` is dataframe agnostic, meaning it can be used with any dataframe library
-that supports
-[Python dataframe interchange protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html).
 
 ## development
 
