@@ -1,4 +1,4 @@
-import * as d3 from "../d3.ts";
+import * as d3 from "../deps/d3.ts";
 import { Bin, Scale } from "../types.ts";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";

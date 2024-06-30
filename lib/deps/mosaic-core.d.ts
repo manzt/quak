@@ -2,10 +2,11 @@
 import type { Query } from "@uwdata/mosaic-sql";
 
 import type * as arrow from "apache-arrow";
-import type { Info } from "./types.ts";
+import type { Info } from "../types.ts";
 
-export interface Selection {
+export class Selection {
 	predicate(client: MosaicClient): Array<unknown>;
+	static crossfilter(): Selection;
 }
 
 export class MosaicClient {
@@ -19,8 +20,21 @@ export class MosaicClient {
 	requestQuery(query: Query): void;
 }
 
-export interface Coordinator {
+export interface Connector {
+	query(query: Query): Promise<arrow.Table | Record<string, unknown>>;
+}
+
+export class Coordinator {
+	constructor();
 	connect(client: MosaicClient): void;
 	disconnect(client: MosaicClient): void;
 	prefetch(query: Query): void;
+	logger(): Logger;
+	databaseConnector(connector: Connector): void;
+	query(query: Query): Promise<arrow.Table>;
+	clear(): void;
 }
+
+type Logger = typeof console & {
+	groupEnd(name?: string): void;
+};

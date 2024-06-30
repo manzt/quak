@@ -1,8 +1,8 @@
 import * as arrow from "apache-arrow";
 
-// @deno-types="../mosaic-core.d.ts"
-import * as mc from "@uwdata/mosaic-core";
-// @deno-types="../mosaic-sql.d.ts"
+// @deno-types="../deps/mosaic-core.d.ts"
+import { MosaicClient, type Selection } from "@uwdata/mosaic-core";
+// @deno-types="../deps/mosaic-sql.d.ts"
 import { desc, Query, SQLExpression } from "@uwdata/mosaic-sql";
 import * as signals from "@preact/signals-core";
 import { html } from "htl";
@@ -21,13 +21,13 @@ interface DataTableOptions {
 	table: string;
 	schema: arrow.Schema;
 	height?: number;
-	filterBy?: mc.Selection;
+	filterBy?: Selection;
 }
 
 // TODO: more
 type ColumnSummaryClient = Histogram;
 
-export class DataTable extends mc.MosaicClient {
+export class DataTable extends MosaicClient {
 	/** source options */
 	#source: DataTableOptions;
 	/** for the component */

@@ -1,5 +1,7 @@
+// @deno-types="./deps/mosaic-core.d.ts";
 import * as mc from "@uwdata/mosaic-core";
-import * as msql from "@uwdata/mosaic-sql";
+// @deno-types="./deps/mosaic-sql.d.ts";
+import { Query } from "@uwdata/mosaic-sql";
 import * as arrow from "apache-arrow";
 import * as uuid from "@lukeed/uuid";
 import type * as aw from "@anywidget/types";
@@ -14,12 +16,8 @@ type Model = {
 	temp_indexes: boolean;
 };
 
-interface Connector {
-	query(query: msql.Query): Promise<arrow.Table | Record<string, unknown>>;
-}
-
 interface OpenQuery {
-	query: Record<string, unknown>;
+	query: Query;
 	startTime: number;
 	resolve: (x: arrow.Table | Record<string, unknown>) => void;
 	reject: (err?: string) => void;
@@ -31,7 +29,6 @@ export default () => {
 
 	return {
 		async initialize({ model }: aw.InitializeProps<Model>) {
-			// ts-expect-error - ok to have no args
 			let logger = coordinator.logger();
 			let openQueries = new Map<string, OpenQuery>();
 
@@ -41,7 +38,7 @@ export default () => {
 			 * @param reject - the promise reject callback
 			 */
 			function send(
-				query: msql.Query,
+				query: Query,
 				resolve: (value: arrow.Table | Record<string, unknown>) => void,
 				reject: (reason?: string) => void,
 			) {
@@ -62,7 +59,7 @@ export default () => {
 				openQueries.delete(msg.uuid);
 				assert(query, `No query found for ${msg.uuid}`);
 				logger.log(
-					query.query.sql,
+					query.query.toString(),
 					(performance.now() - query.startTime).toFixed(1),
 				);
 				if (msg.error) {
@@ -100,13 +97,13 @@ export default () => {
 					send(query, resolve, reject);
 					return promise;
 				},
-			} satisfies Connector;
+			} satisfies mc.Connector;
 
 			coordinator.databaseConnector(connector);
 
 			// get some initial data to get the schema
 			let empty = await coordinator.query(
-				msql.Query
+				Query
 					.from(model.get("_table_name"))
 					.select(...model.get("_columns"))
 					.limit(0)

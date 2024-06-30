@@ -1,6 +1,6 @@
-// @deno-types="../mosaic-core.d.ts";
-import * as mc from "@uwdata/mosaic-core";
-// @deno-types="../mosaic-sql.d.ts";
+// @deno-types="../deps/mosaic-core.d.ts";
+import { MosaicClient, type Selection } from "@uwdata/mosaic-core";
+// @deno-types="../deps/mosaic-sql.d.ts";
 import { count, Query, Ref } from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
 import type * as arrow from "apache-arrow";
@@ -19,11 +19,11 @@ interface HistogramOptions {
 	/** The type of the column. Must be "number" or "date". */
 	type: "number" | "date";
 	/** A mosaic selection to filter the data. */
-	filterBy?: mc.Selection;
+	filterBy?: Selection;
 }
 
 /** Represents a Cross-filtered Histogram */
-export class Histogram extends mc.MosaicClient implements Mark {
+export class Histogram extends MosaicClient implements Mark {
 	type = "rectY";
 	#source: { table: string; column: string; type: "number" | "date" };
 	#el: HTMLElement = document.createElement("div");
