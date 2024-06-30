@@ -1,4 +1,4 @@
-import * as d3 from "../deps.ts";
+import * as d3 from "../d3.ts";
 import { Bin, Scale } from "../types.ts";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
@@ -90,10 +90,8 @@ export function CrossfilterHistogramPlot(
 			d3
 				.axisBottom(x)
 				.tickValues(x.domain())
-				// @ts-expect-error - tickFormat is overloaded
 				.tickFormat(tickFormatterForBins(type, bins))
 				.tickSize(2.5),
-			0,
 		)
 		.call((g) => {
 			g.select(".domain").remove();

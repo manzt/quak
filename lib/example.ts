@@ -4,8 +4,10 @@ import * as msql from "@uwdata/mosaic-sql";
 import { DataTable } from "./clients/DataTable.ts";
 
 let coordinator = new mc.Coordinator();
-let logger = coordinator.logger();
 coordinator.databaseConnector(mc.wasmConnector());
+let logger = coordinator.logger();
+
+console.log(mc.wasmConnector());
 
 await coordinator.exec([
 	msql.loadCSV(
@@ -14,6 +16,7 @@ await coordinator.exec([
 	),
 ]);
 
+// TODO: This should be a helper function
 let empty = await coordinator.query(
 	msql.Query
 		.from("athletes")
@@ -27,7 +30,6 @@ let table = new DataTable({
 	table: "athletes",
 	schema: empty.schema,
 	filterBy: mc.Selection.crossfilter(),
-	height: 500,
 });
 
 document.body.appendChild(table.node());

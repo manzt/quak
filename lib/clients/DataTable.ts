@@ -1,16 +1,18 @@
-/// <reference lib="dom" />
 import * as arrow from "apache-arrow";
 import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 import * as signals from "@preact/signals-core";
 import { html } from "htl";
 
+import { AsyncBatchReader } from "../utils/AsyncBatchReader.ts";
+import { assert } from "../utils/assert.ts";
 import {
 	formatDataTypeName,
 	formatterForDataTypeValue,
 } from "../utils/formatting.ts";
-import { AsyncBatchReader } from "../utils/AsyncBatchReader.ts";
+
 import { Histogram } from "./Histogram.ts";
+import { Info } from "../types.ts";
 
 interface DataTableOptions {
 	table: string;
@@ -166,7 +168,6 @@ export class DataTable extends mc.MosaicClient {
 		this.coordinator.prefetch(query.clone().offset(offset + this.#limit));
 	}
 
-	/** @param {Array<Info>} infos */
 	fieldInfo(infos: Array<Info>) {
 		let classes = classof(this.#source.schema);
 
@@ -272,14 +273,13 @@ export class DataTable extends mc.MosaicClient {
 	#appendRow(d: arrow.StructRowProxy, i: number) {
 		let itr = this.#templateRow?.cloneNode(true);
 		assert(itr, "Must have a data row");
-		let td = /** @type {HTMLTableCellElement} */ (itr?.childNodes[0]);
+		let td = itr.childNodes[0] as HTMLTableCellElement;
 		td.appendChild(document.createTextNode(String(i)));
 		for (let j = 0; j < this.#columns.length; ++j) {
-			td = /** @type {HTMLTableCellElement} */ (itr.childNodes[j + 1]);
+			td = itr.childNodes[j + 1] as HTMLTableCellElement;
 			td.classList.remove("gray");
 			let col = this.#columns[j];
-			/** @type {string} */
-			let stringified: string = this.#format[col](d[col]);
+			let stringified = this.#format[col](d[col]);
 			if (shouldGrayoutValue(stringified)) {
 				td.classList.add("gray");
 			}
@@ -296,12 +296,11 @@ const TRUNCATE = /** @type {const} */ ({
 	textOverflow: "ellipsis",
 });
 
-/**
- * @param {arrow.Field} field
- * @param {number} minWidth
- * @param {ColumnSummaryClient} [vis]
- */
-function thcol(field: arrow.Field, minWidth: number, vis: Histogram) {
+function thcol(
+	field: arrow.Field,
+	minWidth: number,
+	vis?: ColumnSummaryClient,
+) {
 	let buttonVisible = signals.signal(false);
 	let width = signals.signal(minWidth);
 	let sortState: signals.Signal<"unset" | "asc" | "desc"> = signals.signal(
@@ -311,11 +310,11 @@ function thcol(field: arrow.Field, minWidth: number, vis: Histogram) {
 	function nextSortState() {
 		// simple state machine
 		// unset -> asc -> desc -> unset
-		sortState.value = /** @type {const} */ ({
+		sortState.value = ({
 			"unset": "asc",
 			"asc": "desc",
 			"desc": "unset",
-		})[sortState.value];
+		} as const)[sortState.value];
 	}
 
 	// @deno-fmt-ignore
@@ -323,17 +322,13 @@ function thcol(field: arrow.Field, minWidth: number, vis: Histogram) {
 		<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9L12 5.25L15.75 9" />
 		<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75L15.75 15" />
 	</svg>`;
-	/** @type {SVGPathElement} */
 	let uparrow: SVGPathElement = svg.children[0];
-	/** @type {SVGPathElement} */
 	let downarrow: SVGPathElement = svg.children[1];
-	/** @type {HTMLDivElement} */
 	let verticalResizeHandle: HTMLDivElement =
 		html`<div class="resize-handle"></div>`;
 	// @deno-fmt-ignore
 	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
 	// @deno-fmt-ignore
-	/** @type {HTMLTableCellElement} */
 	let th: HTMLTableCellElement = html`<th title=${field.name}>
 		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>

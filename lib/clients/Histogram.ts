@@ -1,8 +1,12 @@
 import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
+import type * as arrow from "apache-arrow";
 
-import type { Channel, Mark } from "../types.ts";
+import { assert } from "../utils/assert.ts";
+import { CrossfilterHistogramPlot } from "../utils/CrossfilterHistogramPlot.ts";
+
+import type { Bin, Channel, Field, Mark, Scale } from "../types.ts";
 
 /** An options bag for the Histogram Mosiac client. */
 interface HistogramOptions {
@@ -31,6 +35,13 @@ export class Histogram extends mc.MosaicClient implements Mark {
 	#interval: mplot.Interval1D | undefined = undefined;
 	/** @type {boolean} */
 	#initialized: boolean = false;
+
+	svg:
+		| SVGSVGElement & {
+			scale: (type: string) => Scale<number, number>;
+			update(bins: Bin[], opts: { nullCount: number }): void;
+		}
+		| undefined;
 
 	constructor(options: HistogramOptions) {
 		super(options.filterBy);
@@ -112,7 +123,7 @@ export class Histogram extends mc.MosaicClient implements Mark {
 		channel: string,
 		{ exact = false }: { exact?: boolean } = {},
 	): Channel {
-		assert(this._fieldInfo, "Field info not set");
+		assert(this.fieldInfo, "Field info not set");
 		let c = exact
 			? this.channel(channel)
 			: this.#channels.find((c) => c.channel.startsWith(channel));
@@ -152,7 +163,7 @@ export class Histogram extends mc.MosaicClient implements Mark {
 			bins.splice(nullBinIndex, 1);
 		}
 		if (!this.#initialized) {
-			this.svg = crossfilterHistogram(bins, {
+			this.svg = CrossfilterHistogramPlot(bins, {
 				nullCount,
 				type: this.#source.type,
 			});

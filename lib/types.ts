@@ -41,7 +41,7 @@ export interface Info {
  *
  * TODO(Trevor): To be honest I don't really know what all the types are.
  */
-interface Field {
+export interface Field {
 	/** The name of the column. */
 	column: string;
 	label: string;
