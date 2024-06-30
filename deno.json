@@ -32,12 +32,12 @@
 	},
 	"fmt": {
 		"useTabs": true,
-		"exclude": [".venv", "src"]
+		"exclude": [".venv", "src", "examples"]
 	},
 	"lint": {
 		"rules": {
 			"exclude": ["prefer-const"]
 		},
-		"exclude": [".venv", "src"]
+		"exclude": [".venv", "src", "examples"]
 	}
 }
