@@ -25,8 +25,8 @@ df = pd.read_csv("https://raw.githubusercontent.com/vega/vega-datasets/main/data
 df
 ```
 
-Any cell that returns an object implementing the [Python dataframe interchange
-protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html)
+Any cell that returns an object implementing the
+[Python dataframe interchange protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html)
 (i.e., a dataframe-like "thing") will be rendered using `quak.Widget`, rather
 than the default renderer.
 
