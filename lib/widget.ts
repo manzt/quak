@@ -17,7 +17,7 @@ type Model = {
 };
 
 interface OpenQuery {
-	query: Query;
+	query: mc.ConnectorQuery;
 	startTime: number;
 	resolve: (x: arrow.Table | Record<string, unknown>) => void;
 	reject: (err?: string) => void;
@@ -38,7 +38,7 @@ export default () => {
 			 * @param reject - the promise reject callback
 			 */
 			function send(
-				query: Query,
+				query: mc.ConnectorQuery,
 				resolve: (value: arrow.Table | Record<string, unknown>) => void,
 				reject: (reason?: string) => void,
 			) {
@@ -88,7 +88,7 @@ export default () => {
 				logger.groupEnd("query");
 			});
 
-			let connector = {
+			coordinator.databaseConnector({
 				query(query) {
 					let { promise, resolve, reject } = defer<
 						arrow.Table | Record<string, unknown>,
@@ -97,9 +97,7 @@ export default () => {
 					send(query, resolve, reject);
 					return promise;
 				},
-			} satisfies mc.Connector;
-
-			coordinator.databaseConnector(connector);
+			});
 
 			// get some initial data to get the schema
 			let empty = await coordinator.query(

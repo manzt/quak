@@ -6,7 +6,7 @@ import { DataTable } from "./clients/DataTable.ts";
 let base = new URL(
 	"https://raw.githubusercontent.com/uwdata/mosaic/main/data/",
 );
-let table: keyof typeof datasets = "metros";
+let table: keyof typeof datasets = "athletes";
 let datasets = {
 	athletes: new URL("athletes.csv", base).href,
 	unemployment: new URL("us-county-unemployment.csv", base).href,

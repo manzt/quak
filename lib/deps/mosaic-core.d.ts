@@ -20,8 +20,12 @@ export class MosaicClient {
 	requestQuery(query: Query): void;
 }
 
+export type ConnectorQuery = { type: "arrow" | "json"; sql: string };
+
 export interface Connector {
-	query(query: Query): Promise<arrow.Table | Record<string, unknown>>;
+	query(
+		query: ConnectorQuery,
+	): Promise<arrow.Table | Record<string, unknown>>;
 }
 
 export class Coordinator {
