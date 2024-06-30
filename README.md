@@ -45,8 +45,9 @@ that supports
 
 **quak** requires both `rye` (for Python) and `deno` (for TypeScript).
 
-If you want to develop in the notebooks (`./examples/`), you will need to 
-run both `deno` (to (re)build the TypeScript) and `rye` (to start the Jupyter notebook):
+If you want to develop in the notebooks (`./examples/`), you will need to run
+both `deno` (to (re)build the TypeScript) and `rye` (to start the Jupyter
+notebook):
 
 ```sh
 deno task dev
