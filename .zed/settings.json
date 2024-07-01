@@ -1,0 +1,14 @@
+{
+	"languages": {
+		"TypeScript": {
+			// Try to get Deno lsp over built-in
+			// https://github.com/zed-industries/zed/issues/5361
+			"language_servers": [
+				"deno",
+				"!typescript-language-server",
+				"!vtsls",
+				"!eslint"
+			]
+		}
+	}
+}
