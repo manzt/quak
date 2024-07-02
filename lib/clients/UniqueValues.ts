@@ -89,8 +89,6 @@ interface UniqueValuesPlotOptions {
 	fillColor?: string;
 	nullFillColor?: string;
 	backgroundBarColor?: string;
-	rx?: number;
-	ry?: number;
 }
 
 function UniqueValuesPlot(
@@ -205,6 +203,7 @@ function UniqueValuesPlot(
 	}
 
 	// virtual elements
+	// TODO: create a div "hover" bar for this "area" of the visualization
 	if (arr.length > thresh) {
 		let width = x(arr.slice(thresh).reduce((acc, d) => acc + d.total, 0));
 		let bar = Object.assign(document.createElement("div"), {
