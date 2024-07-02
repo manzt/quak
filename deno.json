@@ -13,7 +13,8 @@
 			"esnext",
 			"dom",
 			"dom.iterable"
-		]
+		],
+		"skipLibCheck": true
 	},
 	"imports": {
 		"@anywidget/types": "https://esm.sh/@anywidget/types@0.1.9",
