@@ -15,15 +15,15 @@ let datasets = {
 } as const;
 
 let coordinator = new mc.Coordinator();
-let logger = coordinator.logger(voidLogger());
-// let logger = coordinator.logger();
+// let logger = coordinator.logger(voidLogger());
+let logger = coordinator.logger();
 let connector = mc.wasmConnector(); // Wrap the DuckDB-WASM connector with some logging
 coordinator.databaseConnector({
 	async query(query: msql.Query) {
 		logger.group(`query`);
-		logger.log("query", query);
+		logger.log(query);
 		let result = await connector.query(query);
-		logger.log("result", result);
+		logger.log(result);
 		logger.groupEnd(`query`);
 		return result;
 	},
@@ -38,7 +38,9 @@ await coordinator.exec([
 let empty = await coordinator.query(
 	msql.Query
 		.from(table)
-		.select(["*"])
+		.select("*")
+		// .select("nationality")
+		// .select("name", "nationality", "info")
 		.limit(0)
 		.toString(),
 );
@@ -72,7 +74,7 @@ import.meta.hot?.accept("./clients/DataTable.ts", (mod) => {
 	document.body.appendChild(datatable.node());
 });
 
-function voidLogger() {
+function _voidLogger() {
 	return Object.fromEntries(
 		Object.keys(console).map((key) => [key, () => {}]),
 	);

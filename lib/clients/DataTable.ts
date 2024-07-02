@@ -17,6 +17,7 @@ import { formatDataType, formatterForValue } from "../utils/formatting.ts";
 import { Histogram } from "./Histogram.ts";
 
 import stylesString from "./DataTable.css?raw";
+import { UniqueValues } from "./UniqueValues.ts";
 
 interface DataTableOptions {
 	table: string;
@@ -26,7 +27,7 @@ interface DataTableOptions {
 }
 
 // TODO: more
-type ColumnSummaryClient = Histogram;
+type ColumnSummaryClient = Histogram | UniqueValues;
 
 export class DataTable extends MosaicClient {
 	/** source options */
@@ -206,6 +207,12 @@ export class DataTable extends MosaicClient {
 					table: this.#source.table,
 					column: field.name,
 					type: info.type,
+					filterBy: this.#source.filterBy,
+				});
+			} else {
+				vis = new UniqueValues({
+					table: this.#source.table,
+					column: field.name,
 					filterBy: this.#source.filterBy,
 				});
 			}
