@@ -15,9 +15,9 @@ import { AsyncBatchReader } from "../utils/AsyncBatchReader.ts";
 import { assert } from "../utils/assert.ts";
 import { formatDataType, formatterForValue } from "../utils/formatting.ts";
 import { Histogram } from "./Histogram.ts";
+import { ValueCounts } from "./ValueCounts.ts";
 
 import stylesString from "./DataTable.css?raw";
-import { UniqueValues } from "./UniqueValues.ts";
 
 interface DataTableOptions {
 	table: string;
@@ -27,7 +27,7 @@ interface DataTableOptions {
 }
 
 // TODO: more
-type ColumnSummaryClient = Histogram | UniqueValues;
+type ColumnSummaryClient = Histogram | ValueCounts;
 
 export class DataTable extends MosaicClient {
 	/** source options */
@@ -210,7 +210,7 @@ export class DataTable extends MosaicClient {
 					filterBy: this.#source.filterBy,
 				});
 			} else {
-				vis = new UniqueValues({
+				vis = new ValueCounts({
 					table: this.#source.table,
 					column: field.name,
 					filterBy: this.#source.filterBy,

@@ -1,84 +1,8 @@
-// @deno-types="../deps/mosaic-core.d.ts";
-import { MosaicClient, type Selection } from "@uwdata/mosaic-core";
-// @deno-types="../deps/mosaic-sql.d.ts";
-import {
-	column,
-	count,
-	Query,
-	sql,
-	SQLExpression,
-	sum,
-} from "@uwdata/mosaic-sql";
-import * as d3 from "../deps/d3.ts";
 import type * as arrow from "apache-arrow";
 
-interface UniqueValuesOptions {
-	/** The table to query. */
-	table: string;
-	/** The column to use for the histogram. */
-	column: string;
-	/** A mosaic selection to filter the data. */
-	filterBy?: Selection;
-}
+import * as d3 from "../deps/d3.ts";
 
-export class UniqueValues extends MosaicClient {
-	#table: string;
-	#column: string;
-	#el: HTMLElement = document.createElement("div");
-	#markSet: Set<unknown> = new Set();
-	#plot: HTMLElement | undefined;
-
-	constructor(options: UniqueValuesOptions) {
-		super(options.filterBy);
-		this.#table = options.table;
-		this.#column = options.column;
-	}
-
-	query(filter: Array<SQLExpression>): Query {
-		let valueCounts = Query
-			.select({
-				value: sql`CASE
-					WHEN ${column(this.#column)} IS NULL THEN '__quak_null__'
-					ELSE ${column(this.#column)}
-				END`,
-				count: count(),
-			})
-			.from(this.#table)
-			.where(filter)
-			.groupby("value");
-		return Query
-			.with({ value_counts: valueCounts })
-			.select(
-				{
-					key: sql`CASE
-						WHEN "count" = 1 AND "value" != '__quak_null__' THEN '__quak_unique__'
-						ELSE "value"
-					END`,
-					total: sum("count"),
-				},
-			)
-			.from("value_counts")
-			.groupby("key");
-	}
-
-	queryResult(
-		data: arrow.Table<{ key: arrow.Utf8; total: arrow.Int }>, // type comes from the query above
-	): this {
-		if (!this.#plot) {
-			this.#plot = UniqueValuesPlot(data);
-			this.#el.appendChild(this.#plot);
-		}
-		return this;
-	}
-
-	get plot() {
-		return {
-			node: () => this.#el,
-		};
-	}
-}
-
-interface UniqueValuesPlotOptions {
+interface ValueCountsPlot {
 	width?: number;
 	height?: number;
 	marginTop?: number;
@@ -91,7 +15,7 @@ interface UniqueValuesPlotOptions {
 	backgroundBarColor?: string;
 }
 
-function UniqueValuesPlot(
+export function ValueCountsPlot(
 	data: arrow.Table<{
 		key: arrow.Utf8;
 		total: arrow.Int;
@@ -106,7 +30,7 @@ function UniqueValuesPlot(
 		fillColor = "#64748b",
 		nullFillColor = "#ca8a04",
 		backgroundBarColor = "var(--moon-gray)",
-	}: UniqueValuesPlotOptions = {},
+	}: ValueCountsPlot = {},
 ) {
 	let arr: Array<{ key: string; total: number }> = data
 		.toArray()
@@ -157,18 +81,6 @@ function UniqueValuesPlot(
 			textColor: "white",
 			width: x(d.total),
 			height,
-		});
-		bar.addEventListener("mouseenter", () => {
-			text.innerText = d.key;
-			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = b === bar ? "1" : "0.4";
-			});
-		});
-		bar.addEventListener("mouseleave", () => {
-			text.innerText = "";
-			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = "1";
-			});
 		});
 		bars.appendChild(bar);
 	}
@@ -242,18 +154,6 @@ function UniqueValuesPlot(
 			width: x(uniqueItem.total),
 			height,
 		});
-		bar.addEventListener("mouseenter", () => {
-			text.innerText = "unique";
-			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = b === bar ? "1" : "0.4";
-			});
-		});
-		bar.addEventListener("mouseleave", () => {
-			text.innerText = "";
-			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = "1";
-			});
-		});
 		bars.appendChild(bar);
 	}
 
@@ -264,18 +164,6 @@ function UniqueValuesPlot(
 			textColor: "white",
 			width: x(nullItem.total),
 			height,
-		});
-		bar.addEventListener("mouseenter", () => {
-			text.innerText = "null";
-			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = b === bar ? "1" : "0.4";
-			});
-		});
-		bar.addEventListener("mouseleave", () => {
-			text.innerText = "";
-			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = "1";
-			});
 		});
 		bars.appendChild(bar);
 	}
