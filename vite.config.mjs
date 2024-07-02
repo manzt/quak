@@ -6,8 +6,8 @@
  *
  * @example
  * ```sh
- * $ deno run -A npm:vite
  * $ npx vite
+ * $ deno run -A npm:vite
  * ```
  *
  * It does the same "trick" as the other build script to resolve modules to
@@ -19,6 +19,7 @@ let importmap = await fs
 	.readFile(new URL("deno.json", import.meta.url), { encoding: "utf-8" })
 	.then(JSON.parse);
 
+/** @type {import("npm:vite").UserConfig} */
 export default {
 	resolve: { alias: importmap.imports },
 };
