@@ -61,7 +61,8 @@ rye run jupyter lab
 Alternatively, you can just work on the TypeScript side of things by running:
 
 ```sh
-deno task vite
+npx vite
+# or deno run -A npm:vite
 ```
 
 and editing `./lib/example.ts`.
