@@ -82,10 +82,23 @@ export function ValueCountsPlot(
 			width: x(d.total),
 			height,
 		});
+		bar.addEventListener("mouseenter", () => {
+			text.innerText = d.key;
+			bars.querySelectorAll("div").forEach((b) => {
+				b.style.opacity = b === bar ? "1" : "0.4";
+			});
+		});
+		bar.addEventListener("mouseleave", () => {
+			text.innerText = "";
+			bars.querySelectorAll("div").forEach((b) => {
+				b.style.opacity = "1";
+			});
+		});
 		bars.appendChild(bar);
 	}
 
 	// TODO: create a div "hover" bar for this "area" of the visualization
+
 	if (arr.length > thresh) {
 		let total = arr.slice(thresh).reduce((acc, d) => acc + d.total, 0);
 		let bar = Object.assign(document.createElement("div"), {
@@ -121,15 +134,10 @@ export function ValueCountsPlot(
 			let totalItems = arr.length - thresh;
 			// Calculate the index based on the mouse position
 			let index = Math.floor(mouseX / totalWidth * totalItems) + thresh;
-			if (index < arr.length) {
-				text.innerText = arr[index].key;
-			} else {
-				text.innerText = "";
-			}
+			text.innerText = arr[index].key ?? "";
 			bars.querySelectorAll("div").forEach((b) => {
 				b.style.opacity = "0.4";
 			});
-
 			let pos = event.clientX - container.getBoundingClientRect().left;
 			hoverBar.style.left = `${pos}px`;
 			hoverBar.style.visibility = "visible";
@@ -142,6 +150,7 @@ export function ValueCountsPlot(
 			hoverBar.style.left = "0px";
 			hoverBar.style.visibility = "hidden";
 		});
+
 		bars.appendChild(bar);
 		container.appendChild(hoverBar);
 	}
@@ -154,6 +163,18 @@ export function ValueCountsPlot(
 			width: x(uniqueItem.total),
 			height,
 		});
+		bar.addEventListener("mouseenter", () => {
+			text.innerText = "unique";
+			bars.querySelectorAll("div").forEach((b) => {
+				b.style.opacity = b === bar ? "1" : "0.4";
+			});
+		});
+		bar.addEventListener("mouseleave", () => {
+			text.innerText = "";
+			bars.querySelectorAll("div").forEach((b) => {
+				b.style.opacity = "1";
+			});
+		});
 		bars.appendChild(bar);
 	}
 
@@ -164,6 +185,18 @@ export function ValueCountsPlot(
 			textColor: "white",
 			width: x(nullItem.total),
 			height,
+		});
+		bar.addEventListener("mouseenter", () => {
+			text.innerText = "null";
+			bars.querySelectorAll("div").forEach((b) => {
+				b.style.opacity = b === bar ? "1" : "0.4";
+			});
+		});
+		bar.addEventListener("mouseleave", () => {
+			text.innerText = "";
+			bars.querySelectorAll("div").forEach((b) => {
+				b.style.opacity = "1";
+			});
 		});
 		bars.appendChild(bar);
 	}

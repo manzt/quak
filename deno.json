@@ -3,7 +3,7 @@
 	"tasks": {
 		"build": "deno run -A scripts/build.ts",
 		"dev": "deno run -A scripts/build.ts --watch",
-		"typecheck": "deno check lib/widget.ts"
+		"check": "deno check lib/widget.ts"
 	},
 	"compilerOptions": {
 		"verbatimModuleSyntax": true,
@@ -12,8 +12,7 @@
 			"esnext",
 			"dom",
 			"dom.iterable"
-		],
-		"skipLibCheck": true
+		]
 	},
 	"imports": {
 		"@anywidget/types": "https://esm.sh/@anywidget/types@0.1.9",
