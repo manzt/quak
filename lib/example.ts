@@ -38,9 +38,7 @@ await coordinator.exec([
 let empty = await coordinator.query(
 	msql.Query
 		.from(table)
-		.select("*")
-		// .select("nationality")
-		// .select("name", "nationality", "info")
+		.select("name", "nationality", "sport", "info")
 		.limit(0)
 		.toString(),
 );

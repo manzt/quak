@@ -74,11 +74,6 @@ export class UniqueValues extends MosaicClient {
 	get plot() {
 		return {
 			node: () => this.#el,
-			/** @param {string} _name */
-			getAttribute(_name: string) {
-				return undefined;
-			},
-			markSet: this.#markSet,
 		};
 	}
 }
