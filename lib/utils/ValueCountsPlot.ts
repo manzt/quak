@@ -27,8 +27,8 @@ export function ValueCountsPlot(
 		marginRight = 2,
 		// marginBottom = 12,
 		marginLeft = 2,
-		fillColor = "#64748b",
-		nullFillColor = "#ca8a04",
+		fillColor = "var(--primary)",
+		nullFillColor = "var(--secondary)",
 		backgroundBarColor = "var(--moon-gray)",
 	}: ValueCountsPlot = {},
 ) {
