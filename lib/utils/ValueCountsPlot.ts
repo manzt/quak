@@ -29,7 +29,7 @@ export function ValueCountsPlot(
 		marginLeft = 2,
 		fillColor = "var(--primary)",
 		nullFillColor = "var(--secondary)",
-		backgroundBarColor = "var(--moon-gray)",
+		backgroundBarColor = "rgb(226, 226, 226)",
 	}: ValueCountsPlot = {},
 ) {
 	let arr: Array<{ key: string; total: number }> = data
@@ -89,7 +89,7 @@ export function ValueCountsPlot(
 			});
 		});
 		bar.addEventListener("mouseleave", () => {
-			text.innerText = "";
+			text.innerText = defaultText;
 			bars.querySelectorAll("div").forEach((b) => {
 				b.style.opacity = "1";
 			});
@@ -143,7 +143,7 @@ export function ValueCountsPlot(
 			hoverBar.style.visibility = "visible";
 		});
 		bar.addEventListener("mouseleave", () => {
-			text.innerText = "";
+			text.innerText = defaultText;
 			bars.querySelectorAll("div").forEach((b) => {
 				b.style.opacity = "1";
 			});
@@ -164,13 +164,15 @@ export function ValueCountsPlot(
 			height,
 		});
 		bar.addEventListener("mouseenter", () => {
-			text.innerText = "unique";
+			text.innerText = `${uniqueItem.total.toLocaleString()} unique value${
+				uniqueItem.total === 1 ? "" : "s"
+			}`;
 			bars.querySelectorAll("div").forEach((b) => {
 				b.style.opacity = b === bar ? "1" : "0.4";
 			});
 		});
 		bar.addEventListener("mouseleave", () => {
-			text.innerText = "";
+			text.innerText = defaultText;
 			bars.querySelectorAll("div").forEach((b) => {
 				b.style.opacity = "1";
 			});
@@ -187,13 +189,13 @@ export function ValueCountsPlot(
 			height,
 		});
 		bar.addEventListener("mouseenter", () => {
-			text.innerText = "null";
-			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = b === bar ? "1" : "0.4";
-			});
+			text.innerText = "null",
+				bars.querySelectorAll("div").forEach((b) => {
+					b.style.opacity = b === bar ? "1" : "0.4";
+				});
 		});
 		bar.addEventListener("mouseleave", () => {
-			text.innerText = "";
+			text.innerText = defaultText;
 			bars.querySelectorAll("div").forEach((b) => {
 				b.style.opacity = "1";
 			});
@@ -201,6 +203,9 @@ export function ValueCountsPlot(
 		bars.appendChild(bar);
 	}
 
+	let defaultText = `${data.numRows.toLocaleString()} ${
+		data.numRows === 1 ? "category" : "categories"
+	}`;
 	let text = document.createElement("div");
 	Object.assign(text.style, {
 		pointerEvents: "none",
@@ -210,8 +215,10 @@ export function ValueCountsPlot(
 		textOverflow: "ellipsis",
 		position: "absolute",
 		fontWeight: 400,
+		marginTop: "1.5px",
 		color: "var(--mid-gray)",
 	});
+	text.innerText = defaultText;
 
 	container.appendChild(bars);
 	container.appendChild(text);
