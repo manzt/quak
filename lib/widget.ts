@@ -114,11 +114,9 @@ export default () => {
 			};
 		},
 		render({ model, el }: aw.RenderProps<Model>) {
-			let $brush = mc.Selection.crossfilter();
 			let table = new DataTable({
 				table: model.get("_table_name"),
 				schema: schema,
-				filterBy: $brush,
 			});
 			coordinator.connect(table);
 			el.appendChild(table.node());

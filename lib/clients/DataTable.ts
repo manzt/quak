@@ -4,7 +4,7 @@ import {
 	type FieldRequest,
 	type Info,
 	MosaicClient,
-	type Selection,
+	Selection,
 } from "@uwdata/mosaic-core";
 // @deno-types="../deps/mosaic-sql.d.ts"
 import { desc, Query, SQLExpression } from "@uwdata/mosaic-sql";
@@ -23,15 +23,14 @@ interface DataTableOptions {
 	table: string;
 	schema: arrow.Schema;
 	height?: number;
-	filterBy?: Selection;
 }
 
 // TODO: more
 type ColumnSummaryClient = Histogram | ValueCounts;
 
 export class DataTable extends MosaicClient {
-	/** source options */
-	#source: DataTableOptions;
+	/** source of the data */
+	#meta: { table: string; schema: arrow.Schema };
 	/** for the component */
 	#root: HTMLElement = document.createElement("div");
 	/** shadow root for the component */
@@ -67,10 +66,10 @@ export class DataTable extends MosaicClient {
 	#reader: AsyncBatchReader<arrow.StructRowProxy> | null = null;
 
 	constructor(source: DataTableOptions) {
-		super(source.filterBy);
-		this.#source = source;
+		super(Selection.crossfilter());
 		this.#format = formatof(source.schema);
 		this.#pending = false;
+		this.#meta = source;
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
 		// if maxHeight is set, calculate the number of rows to display
@@ -103,7 +102,7 @@ export class DataTable extends MosaicClient {
 
 	fields(): Array<FieldRequest> {
 		return this.#columns.map((column) => ({
-			table: this.#source.table,
+			table: this.#meta.table,
 			column,
 			stats: [],
 		}));
@@ -114,14 +113,14 @@ export class DataTable extends MosaicClient {
 	}
 
 	get #columns() {
-		return this.#source.schema.fields.map((field) => field.name);
+		return this.#meta.schema.fields.map((field) => field.name);
 	}
 
 	/**
 	 * @param {Array<unknown>} filter
 	 */
 	query(filter: Array<unknown> = []) {
-		return Query.from(this.#source.table)
+		return Query.from(this.#meta.table)
 			.select(this.#columns)
 			.where(filter)
 			.orderby(
@@ -174,7 +173,7 @@ export class DataTable extends MosaicClient {
 	}
 
 	fieldInfo(infos: Array<Info>) {
-		let classes = classof(this.#source.schema);
+		let classes = classof(this.#meta.schema);
 
 		// @deno-fmt-ignore
 		this.#templateRow = html`<tr><td></td>${
@@ -198,22 +197,22 @@ export class DataTable extends MosaicClient {
 			root: this.#tableRoot,
 		});
 
-		let cols = this.#source.schema.fields.map((field) => {
+		let cols = this.#meta.schema.fields.map((field) => {
 			let info = infos.find((c) => c.column === field.name);
 			assert(info, `No info for column ${field.name}`);
 			let vis: ColumnSummaryClient | undefined = undefined;
 			if (info.type === "number" || info.type === "date") {
 				vis = new Histogram({
-					table: this.#source.table,
+					table: this.#meta.table,
 					column: field.name,
 					type: info.type,
-					filterBy: this.#source.filterBy,
+					filterBy: this.filterBy,
 				});
 			} else {
 				vis = new ValueCounts({
-					table: this.#source.table,
+					table: this.#meta.table,
 					column: field.name,
-					filterBy: this.#source.filterBy,
+					filterBy: this.filterBy,
 				});
 			}
 			let th = thcol(field, this.#columnWidth, vis);

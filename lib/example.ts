@@ -47,7 +47,6 @@ let empty = await coordinator.query(
 let datatable = new DataTable({
 	table,
 	schema: empty.schema,
-	filterBy: mc.Selection.crossfilter(),
 	height: 500,
 });
 
@@ -66,7 +65,6 @@ import.meta.hot?.accept("./clients/DataTable.ts", (mod) => {
 	datatable = new mod.DataTable({
 		table,
 		schema: empty.schema,
-		filterBy: mc.Selection.crossfilter(),
 		height: 500,
 	});
 	coordinator.connect(datatable);
