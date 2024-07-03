@@ -74,6 +74,7 @@ export function ValueCountsPlot(
 
 	// number of bars to show before virtualizing
 	let thresh = 20;
+	let selected: undefined | HTMLDivElement;
 	for (let d of arr.slice(0, thresh)) {
 		let bar = createBar({
 			title: d.key,
@@ -82,17 +83,41 @@ export function ValueCountsPlot(
 			width: x(d.total),
 			height,
 		});
+		bar.addEventListener("mousedown", () => {
+			if (selected === bar) {
+				// deselect
+				selected = undefined;
+				bars.querySelectorAll("div").forEach((b) => {
+					b.style.opacity = "1";
+					b.style.borderColor = "white";
+				});
+				return;
+			}
+			selected = bar;
+			bars.querySelectorAll("div").forEach((b) => {
+				b.style.opacity = "0.4";
+				b.style.borderColor = "white";
+			});
+			bar.style.opacity = "1";
+			bar.style.borderColor = "black";
+		});
 		bar.addEventListener("mouseenter", () => {
 			text.innerText = d.key;
 			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = b === bar ? "1" : "0.4";
+				b.style.opacity = (b === bar || b === selected) ? "1" : "0.4";
 			});
 		});
 		bar.addEventListener("mouseleave", () => {
-			text.innerText = defaultText;
-			bars.querySelectorAll("div").forEach((b) => {
-				b.style.opacity = "1";
-			});
+			text.innerText = selected?.title ?? defaultText;
+			if (selected) {
+				bars.querySelectorAll("div").forEach((b) => {
+					b.style.opacity = (b === selected) ? "1" : "0.4";
+				});
+			} else {
+				bars.querySelectorAll("div").forEach((b) => {
+					b.style.opacity = "1";
+				});
+			}
 		});
 		bars.appendChild(bar);
 	}
