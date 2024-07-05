@@ -48,4 +48,4 @@ jobs:
         with:
           deno-version: v1.x
       - run: |
-          deno task typecheck
+          deno task check

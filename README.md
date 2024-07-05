@@ -73,7 +73,7 @@ We check linting and formatting in CI:
 # typescript
 deno lint
 deno fmt
-deno task typecheck
+deno task check
 
 # python
 rye lint

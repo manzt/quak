@@ -34,8 +34,8 @@ export function CrossfilterHistogramPlot(
 		marginBottom = 12,
 		marginLeft = 2,
 		nullCount = 0,
-		fillColor = "#64748b",
-		nullFillColor = "#ca8a04",
+		fillColor = "var(--primary)",
+		nullFillColor = "var(--secondary)",
 		backgroundBarColor = "var(--moon-gray)",
 	}: HistogramOptions,
 ): SVGSVGElement & {

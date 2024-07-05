@@ -1,13 +1,19 @@
 :host {
-  all: initial;
-  --sans-serif: -apple-system, BlinkMacSystemFont, "avenir next", avenir, helvetica, "helvetica neue", ubuntu, roboto, noto, "segoe ui", arial, sans-serif;
-  --light-silver: #efefef;
-  --spacing-none: 0;
-  --white: #fff;
-  --gray: #929292;
-  --dark-gray: #333;
-  --moon-gray: #c4c4c4;
-  --mid-gray: #6e6e6e;
+	all: initial;
+	--sans-serif: -apple-system, BlinkMacSystemFont, "avenir next", avenir, helvetica, "helvetica neue", ubuntu, roboto, noto, "segoe ui", arial, sans-serif;
+	--light-silver: #efefef;
+	--spacing-none: 0;
+	--white: #fff;
+	--gray: #929292;
+	--dark-gray: #333;
+	--moon-gray: #c4c4c4;
+	--mid-gray: #6e6e6e;
+
+	--stone-blue: #64748b;
+	--yellow-gold: #ca8a04;
+
+	--primary: var(--stone-blue);
+	--secondary: var(--yellow-gold);
 }
 
 .highlight {
@@ -69,7 +75,7 @@ th {
   background: var(--white);
   border-bottom: solid 1px var(--light-silver);
   border-left: solid 1px var(--light-silver);
-  padding: 5px 6px 0 6px;
+  padding: 5px 6px;
   user-select: none;
 }
 

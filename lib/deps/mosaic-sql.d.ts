@@ -81,14 +81,23 @@ export class Query {
 	constructor();
 	static from(table: string | { source: string }): Query;
 	static select(...exprs: unknown[]): Query;
+	static with(...exprs: unknown[]): Query;
+	from(...exprs: unknown[]): Query;
 	select(...exprs: unknown[]): Query;
 	orderby(...exprs: unknown[]): Query;
 	where(...exprs: unknown[]): Query;
 	limit(limit: number): Query;
 	offset(offset: number): Query;
 	groupby(...exprs: unknown[]): Query;
+	with(...exprs: unknown[]): Query;
 	clone(): Query;
 }
 
 export declare function desc(column: string): SQLExpression;
 export declare function count(): SQLExpression;
+export declare function sum(column: string): SQLExpression;
+export declare function sql(
+	parts: TemplateStringsArray,
+	...values: unknown[]
+): SQLExpression;
+export declare function column(column: string): SQLExpression;
