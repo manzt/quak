@@ -25,16 +25,13 @@ export class StatusBar extends MosaicClient {
 		this.#el.appendChild(this.#span);
 
 		this.#button.addEventListener("mousedown", () => {
-			console.log(this.filterBy);
-			// TODO: Figure this out
+			// TODO: A better way to do this?
 			// We want to clear all the existing selections
 			// @see https://github.com/uwdata/mosaic/blob/8e63149753e7d6ca30274c032a04744e14df2fd6/packages/core/src/Selection.js#L265-L272
-
-			// let _resolver = this.filterBy?.resolver;
-			// this.filterBy.clauses.forEach(c => c.source?.reset?.());
-			// this.filterBy.clauses.map(clause => {
-			//   this.filterBy.update(clause);
-			// })
+			for (let { source } of this.filterBy.clauses) {
+				source.reset();
+				this.filterBy.update(source.clause());
+			}
 		});
 
 		Object.assign(this.#el.style, {
