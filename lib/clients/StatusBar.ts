@@ -43,6 +43,16 @@ export class StatusBar extends MosaicClient {
 				this.filterBy.update(source.clause());
 			}
 		});
+
+		this.#button.style.visibility = "hidden";
+		this.filterBy?.addEventListener("value", () => {
+			// decide whether to display the reset button any time the filter changes
+			if (this.filterBy?.clauses.length === 0) {
+				this.#button.style.visibility = "hidden";
+			} else {
+				this.#button.style.visibility = "visible";
+			}
+		});
 	}
 
 	query(filter = []) {

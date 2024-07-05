@@ -20,6 +20,11 @@ export class Selection {
 	static crossfilter(): Selection;
 	clauses: Array<Clause<Interactor>>;
 	update(clause: Clause<unknown>): void;
+	addEventListener(event: "activate", listener: () => void): void;
+	addEventListener<T = unknown>(
+		event: "value",
+		listener: (value?: T) => void,
+	): void;
 }
 
 /** Represents a request for information for a column from the coordinator */
