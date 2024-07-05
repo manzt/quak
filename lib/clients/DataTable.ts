@@ -17,7 +17,7 @@ import { formatDataType, formatterForValue } from "../utils/formatting.ts";
 import { Histogram } from "./Histogram.ts";
 import { ValueCounts } from "./ValueCounts.ts";
 
-import stylesString from "./DataTable.css?raw";
+import stylesString from "./styles.css?raw";
 import { StatusBar } from "./StatusBar.ts";
 
 interface DataTableOptions {
@@ -84,7 +84,7 @@ export class DataTable extends MosaicClient {
 		}}>`;
 		// @deno-fmt-ignore
 		root.appendChild(
-			html.fragment`<table class="quak" style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
+			html.fragment`<table style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
 		);
 		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
 		this.#shadowRoot.appendChild(root);
