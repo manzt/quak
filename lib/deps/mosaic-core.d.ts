@@ -2,9 +2,24 @@
 import type { Query } from "@uwdata/mosaic-sql";
 import type * as arrow from "apache-arrow";
 
+export interface Interactor<T = unknown> {
+	reset(): void;
+	clause(update?: T): Clause<Interactor>;
+}
+
+export interface Clause<Source> {
+	source: Source;
+	clients: Set<MosaicClient>;
+	predicate: unknown;
+	value: unknown;
+	schema: Record<string, unknown>;
+}
+
 export class Selection {
 	predicate(client: MosaicClient): Array<unknown>;
 	static crossfilter(): Selection;
+	clauses: Array<Clause<Interactor>>;
+	update(clause: Clause<unknown>): void;
 }
 
 /** Represents a request for information for a column from the coordinator */
@@ -102,3 +117,9 @@ export class Coordinator {
 type Logger = typeof console & {
 	groupEnd(name?: string): void;
 };
+
+export declare function clausePoint<T>(
+	field: string,
+	value: unknown,
+	options: { source: T },
+): Clause<T>;
