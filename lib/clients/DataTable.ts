@@ -338,7 +338,7 @@ function thcol(
 	// @deno-fmt-ignore
 	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
 	// @deno-fmt-ignore
-	let th: HTMLTableCellElement = html`<th title=${field.name}>
+	let th: HTMLTableCellElement = html`<th>
 		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
 			${sortButton}
