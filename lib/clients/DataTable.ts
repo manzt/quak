@@ -16,6 +16,7 @@ import { assert } from "../utils/assert.ts";
 import { formatDataType, formatterForValue } from "../utils/formatting.ts";
 import { Histogram } from "./Histogram.ts";
 import { ValueCounts } from "./ValueCounts.ts";
+import { signal } from "@preact/signals-core";
 
 import stylesString from "./styles.css?raw";
 import { StatusBar } from "./StatusBar.ts";
@@ -66,6 +67,8 @@ export class DataTable extends MosaicClient {
 	/** @type {AsyncBatchReader<arrow.StructRowProxy> | null} */
 	#reader: AsyncBatchReader<arrow.StructRowProxy> | null = null;
 
+	#sql = signal(undefined as string | undefined);
+
 	constructor(source: DataTableOptions) {
 		super(Selection.crossfilter());
 		this.#format = formatof(source.schema);
@@ -101,6 +104,10 @@ export class DataTable extends MosaicClient {
 		});
 	}
 
+	get sql() {
+		return this.#sql.value;
+	}
+
 	fields(): Array<FieldRequest> {
 		return this.#columns.map((column) => ({
 			table: this.#meta.table,
@@ -121,14 +128,16 @@ export class DataTable extends MosaicClient {
 	 * @param {Array<unknown>} filter
 	 */
 	query(filter: Array<unknown> = []) {
-		return Query.from(this.#meta.table)
+		let query = Query.from(this.#meta.table)
 			.select(this.#columns)
 			.where(filter)
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
 					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
-			)
+			);
+		this.#sql.value = query.clone().toString();
+		return query
 			.limit(this.#limit)
 			.offset(this.#offset);
 	}

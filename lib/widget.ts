@@ -5,6 +5,7 @@ import { Query } from "@uwdata/mosaic-sql";
 import * as arrow from "apache-arrow";
 import * as uuid from "@lukeed/uuid";
 import type * as aw from "@anywidget/types";
+import { effect } from "@preact/signals-core";
 
 import { DataTable } from "./clients/DataTable.ts";
 import { assert } from "./utils/assert.ts";
@@ -14,6 +15,7 @@ type Model = {
 	_table_name: string;
 	_columns: Array<string>;
 	temp_indexes: boolean;
+	sql: string;
 };
 
 interface OpenQuery {
@@ -29,7 +31,7 @@ export default () => {
 
 	return {
 		async initialize({ model }: aw.InitializeProps<Model>) {
-			let logger = coordinator.logger();
+			let logger = coordinator.logger(_voidLogger());
 			let openQueries = new Map<string, OpenQuery>();
 
 			/**
@@ -119,7 +121,17 @@ export default () => {
 				schema: schema,
 			});
 			coordinator.connect(table);
+			effect(() => {
+				model.set("sql", table.sql ?? "");
+				model.save_changes();
+			});
 			el.appendChild(table.node());
 		},
 	};
 };
+
+function _voidLogger() {
+	return Object.fromEntries(
+		Object.keys(console).map((key) => [key, () => {}]),
+	);
+}

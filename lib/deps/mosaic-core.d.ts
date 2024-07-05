@@ -113,7 +113,7 @@ export class Coordinator {
 	connect(client: MosaicClient): void;
 	disconnect(client: MosaicClient): void;
 	prefetch(query: Query): void;
-	logger(): Logger;
+	logger(impl?: unknown): Logger;
 	databaseConnector(connector: Connector): void;
 	query(query: Query): Promise<arrow.Table>;
 	clear(): void;
