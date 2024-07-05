@@ -18,6 +18,7 @@ import { Histogram } from "./Histogram.ts";
 import { ValueCounts } from "./ValueCounts.ts";
 
 import stylesString from "./DataTable.css?raw";
+import { StatusBar } from "./StatusBar.ts";
 
 interface DataTableOptions {
 	table: string;
@@ -174,6 +175,15 @@ export class DataTable extends MosaicClient {
 
 	fieldInfo(infos: Array<Info>) {
 		let classes = classof(this.#meta.schema);
+
+		{
+			let statusBar = new StatusBar({
+				table: this.#meta.table,
+				filterBy: this.filterBy,
+			});
+			this.coordinator.connect(statusBar);
+			this.#shadowRoot.appendChild(statusBar.node());
+		}
 
 		// @deno-fmt-ignore
 		this.#templateRow = html`<tr><td></td>${
