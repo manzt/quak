@@ -93,7 +93,7 @@ export function ValueCountsPlot(
 	root.appendChild(container);
 	root.appendChild(text);
 	root.appendChild(hitArea);
-	return root;
+	return Object.assign(root, { selected });
 }
 
 function createBar(opts: {

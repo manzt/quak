@@ -28,7 +28,6 @@ export class Histogram extends MosaicClient implements Mark {
 	#source: { table: string; column: string; type: "number" | "date" };
 	#el: HTMLElement = document.createElement("div");
 	#channels: Array<Channel> = [];
-	#markSet: Set<unknown> = new Set();
 	#interval: mplot.Interval1D | undefined = undefined;
 	#initialized: boolean = false;
 	#fieldInfo: boolean = false;
@@ -67,6 +66,7 @@ export class Histogram extends MosaicClient implements Mark {
 				selection: this.filterBy,
 				field: this.#source.column,
 				brush: undefined,
+				peers: false,
 			});
 		}
 	}
@@ -176,7 +176,6 @@ export class Histogram extends MosaicClient implements Mark {
 			getAttribute(_name: string) {
 				return undefined;
 			},
-			markSet: this.#markSet,
 		};
 	}
 }

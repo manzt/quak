@@ -1,5 +1,5 @@
 // @deno-types="../deps/mosaic-core.d.ts";
-import { MosaicClient, type Selection } from "@uwdata/mosaic-core";
+import { clausePoint, MosaicClient, type Selection } from "@uwdata/mosaic-core";
 // @deno-types="../deps/mosaic-sql.d.ts";
 import {
 	column,
@@ -10,8 +10,10 @@ import {
 	sum,
 } from "@uwdata/mosaic-sql";
 import type * as arrow from "apache-arrow";
+import { effect } from "@preact/signals-core";
 
 import { ValueCountsPlot } from "../utils/ValueCountsPlot.ts";
+import { assert } from "../utils/assert.ts";
 
 interface UniqueValuesOptions {
 	/** The table to query. */
@@ -26,12 +28,21 @@ export class ValueCounts extends MosaicClient {
 	#table: string;
 	#column: string;
 	#el: HTMLElement = document.createElement("div");
-	#plot: HTMLElement | undefined;
+	#plot: ReturnType<typeof ValueCountsPlot> | undefined;
 
 	constructor(options: UniqueValuesOptions) {
 		super(options.filterBy);
 		this.#table = options.table;
 		this.#column = options.column;
+	}
+
+	clause(value?: unknown) {
+		return clausePoint(this.#column, value, { source: this });
+	}
+
+	reset() {
+		assert(this.#plot, "ValueCounts plot not initialized");
+		this.#plot.selected.value = undefined;
 	}
 
 	query(filter: Array<SQLExpression>): Query {
@@ -67,6 +78,10 @@ export class ValueCounts extends MosaicClient {
 		if (!this.#plot) {
 			this.#plot = ValueCountsPlot(data);
 			this.#el.appendChild(this.#plot);
+			effect(() => {
+				let clause = this.clause(this.#plot!.selected.value);
+				this.filterBy?.update(clause);
+			});
 		}
 		return this;
 	}

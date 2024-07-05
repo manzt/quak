@@ -117,3 +117,9 @@ export class Coordinator {
 type Logger = typeof console & {
 	groupEnd(name?: string): void;
 };
+
+export declare function clausePoint<T>(
+	field: string,
+	value: unknown,
+	options: { source: T },
+): Clause<T>;
