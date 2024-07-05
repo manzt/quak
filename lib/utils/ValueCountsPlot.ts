@@ -87,7 +87,7 @@ export function ValueCountsPlot(
 
 	effect(() => {
 		text.textContent = bars.textFor(hovering.value ?? selected.value);
-		bars.render(hovering.value, selected.value);
+		bars.highlight(hovering.value, selected.value);
 	});
 
 	root.appendChild(container);
@@ -194,8 +194,6 @@ function createBars(data: CountTableData, opts: {
 			title: "__quak_virtual__",
 		});
 		Object.assign(virtualBar.style, {
-			background:
-				`repeating-linear-gradient(to right, ${opts.fillColor} 0px, ${opts.fillColor} 1px, white 1px, white 2px)`,
 			width: `${x(total)}px`,
 			height: "100%",
 			borderColor: "white",
@@ -203,7 +201,14 @@ function createBars(data: CountTableData, opts: {
 			borderStyle: "solid",
 			opacity: 1,
 		});
-
+		let vbars = document.createElement("div");
+		Object.assign(vbars.style, {
+			width: "100%",
+			height: "100%",
+			background:
+				`repeating-linear-gradient(to right, ${opts.fillColor} 0px, ${opts.fillColor} 1px, white 1px, white 2px)`,
+		});
+		virtualBar.appendChild(vbars);
 		virtualBar.appendChild(hoverBar);
 		virtualBar.appendChild(selectBar);
 		Object.defineProperty(virtualBar, "data", {
@@ -259,21 +264,33 @@ function createBars(data: CountTableData, opts: {
 
 	function virtualBin(key: string) {
 		assert(virtualBar);
+		//TODO: Is there a better way to do this?
+		let voffset = bars
+			.slice(0, thresh)
+			.map((b) => b.getBoundingClientRect().width)
+			.reduce((a, b) => a + b, 0);
+
 		// @ts-expect-error - data is a property we set on the element
 		let vbins: Array<{ key: string; total: number }> = virtualBar.data;
 		let rect = virtualBar.getBoundingClientRect();
 		let dx = rect.width / vbins.length;
 		let idx = vbins.findIndex((d) => d.key === key);
-		assert(idx !== -1);
+		assert(idx !== -1, `key ${key} not found in virtual bins`);
 		return {
 			...vbins[idx],
-			x: dx * idx,
+			x: dx * idx + voffset,
 		};
 	}
 
 	function reset(opactiy: number) {
 		bars.forEach((bar) => {
-			bar.style.opacity = opactiy.toString();
+			if (bar.title === "__quak_virtual__") {
+				// @ts-expect-error - we set this above
+				let vbars: HTMLDivElement = bar.firstChild!;
+				vbars.style.opacity = opactiy.toString();
+			} else {
+				bar.style.opacity = opactiy.toString();
+			}
 			bar.style.borderColor = "white";
 			bar.style.borderWidth = "0px 1px 0px 0px";
 			bar.style.removeProperty("box-shadow");
@@ -290,6 +307,7 @@ function createBars(data: CountTableData, opts: {
 			return;
 		}
 		let vbin = virtualBin(key);
+		hoverBar.style.opacity = "1";
 		hoverBar.title = vbin.key;
 		hoverBar.style.left = `${vbin.x}px`;
 		hoverBar.style.visibility = "visible";
@@ -299,10 +317,11 @@ function createBars(data: CountTableData, opts: {
 		let bar = bars.find((b) => b.title === key);
 		if (bar) {
 			bar.style.opacity = "1";
-			bar.style.boxShadow = "inset 0 0 0 1px black";
+			bar.style.boxShadow = "inset 0 0 0 1.2px black";
 			return;
 		}
 		let vbin = virtualBin(key);
+		selectBar.style.opacity = "1";
 		selectBar.title = vbin.key;
 		selectBar.style.left = `${vbin.x}px`;
 		selectBar.style.visibility = "visible";
@@ -324,7 +343,7 @@ function createBars(data: CountTableData, opts: {
 			let idx = Math.floor((mouseX / rect.width) * data.length);
 			return data[idx].key;
 		},
-		render(hovering?: string, selected?: string) {
+		highlight(hovering?: string, selected?: string) {
 			reset(hovering || selected ? 0.4 : 1);
 			if (hovering) hover(hovering);
 			if (selected) select(selected);
