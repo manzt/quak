@@ -133,3 +133,28 @@ tr:first-child td {
 	background-color: var(--white);
 	user-select: none;
 }
+
+.status-bar {
+	position: absolute;
+	right: 0;
+	font-family: var(--sans-serif);
+	margin-right: 20px;
+	margin-top: 5px;
+}
+
+.status-bar button {
+	border: none;
+	background-color: var(--white);
+	color: var(--primary);
+	font-weight: 600;
+	font-size: 0.875rem;
+	cursor: pointer;
+	margin-right: 10px;
+}
+
+.status-bar span {
+	color: var(--gray);
+	font-weight: 400;
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+}
