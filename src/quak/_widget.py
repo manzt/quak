@@ -81,3 +81,7 @@ class Widget(anywidget.AnyWidget):
             logger.warning(f"DONE. Slow query { uuid } took { total } ms.\n{ sql }")
         else:
             logger.info(f"DONE. Query { uuid } took { total } ms.\n{ sql }")
+
+    def data(self) -> duckdb.DuckDBPyRelation:
+        """Return the current SQL as a DuckDB relation."""
+        return self._conn.query(self.sql)
