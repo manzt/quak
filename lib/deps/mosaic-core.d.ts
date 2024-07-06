@@ -1,5 +1,5 @@
 // @deno-types="./mosaic-sql.d.ts";
-import type { Query } from "@uwdata/mosaic-sql";
+import type { Query, SQLExpression } from "@uwdata/mosaic-sql";
 import type * as arrow from "apache-arrow";
 
 export interface Interactor<T = unknown> {
@@ -44,7 +44,7 @@ interface FieldRequest {
  * and eventually returned into `fieldInfo(infos)` on the same
  * client by the Coordinator.
  */
-export interface Info {
+export interface FieldInfo {
 	/** The name of the column. */
 	column: string;
 	/** The column data type as JavaScript primitive (e.g. "string", "number"). */
@@ -62,6 +62,24 @@ export interface Info {
 	/** The number of distinct values for the column. Only present if requested in `fields()` */
 	distinct?: number;
 }
+
+/**
+ * TODO(Trevor): To be honest I don't really know what all the types are.
+ *
+ * My understanding is that this is an extension of the `fields()`
+ * returned by a MosiacClient.
+ */
+export interface ColumnField {
+	basis: string;
+	column: string;
+	columns: string[];
+	label: string;
+	stats: { column: string; stats: string[] };
+	toString: () => string;
+	aggregate?: boolean;
+}
+
+export type Field = ColumnField | SQLExpression;
 
 /**
  * Represents a mosaic client.
@@ -90,7 +108,7 @@ export class MosaicClient {
 	 */
 	fields(): Array<FieldRequest>;
 	/**  */
-	fieldInfo(infos: Array<Info>): void;
+	fieldInfo(infos: Array<FieldInfo>): void;
 	query(filter?: Array<unknown>): Query;
 	/** Called before the coordinator submitting a query to inform the client */
 	queryPending(): this;

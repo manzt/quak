@@ -1,14 +1,20 @@
 // @deno-types="../deps/mosaic-core.d.ts";
-import { type Info, MosaicClient, type Selection } from "@uwdata/mosaic-core";
+import {
+	type ColumnField,
+	type FieldInfo,
+	type FieldRequest,
+	MosaicClient,
+	type Selection,
+} from "@uwdata/mosaic-core";
 // @deno-types="../deps/mosaic-sql.d.ts";
-import { count, Query, Ref } from "@uwdata/mosaic-sql";
+import { count, Query, SQLExpression } from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
 import type * as arrow from "apache-arrow";
 
-import { assert } from "../utils/assert.ts";
 import { CrossfilterHistogramPlot } from "../utils/CrossfilterHistogramPlot.ts";
 
-import type { Bin, Channel, CompleteField, Mark, Scale } from "../types.ts";
+import type { Bin, Mark, Scale } from "../types.ts";
+import { assert } from "../utils/assert.ts";
 
 /** An options bag for the Histogram Mosiac client. */
 interface HistogramOptions {
@@ -19,7 +25,7 @@ interface HistogramOptions {
 	/** The type of the column. Must be "number" or "date". */
 	type: "number" | "date";
 	/** A mosaic selection to filter the data. */
-	filterBy?: Selection;
+	filterBy: Selection;
 }
 
 /** Represents a Cross-filtered Histogram */
@@ -27,10 +33,14 @@ export class Histogram extends MosaicClient implements Mark {
 	type = "rectY";
 	#source: { table: string; column: string; type: "number" | "date" };
 	#el: HTMLElement = document.createElement("div");
-	#channels: Array<Channel> = [];
+	#select: {
+		x1: ColumnField;
+		x2: ColumnField;
+		y: SQLExpression;
+	};
 	#interval: mplot.Interval1D | undefined = undefined;
 	#initialized: boolean = false;
-	#fieldInfo: boolean = false;
+	#fieldInfo: FieldInfo | undefined;
 	svg:
 		| SVGSVGElement & {
 			scale: (type: string) => Scale<number, number>;
@@ -41,91 +51,40 @@ export class Histogram extends MosaicClient implements Mark {
 	constructor(options: HistogramOptions) {
 		super(options.filterBy);
 		this.#source = options;
-		let process = (channel: string, entry: unknown) => {
-			if (isTransform(entry)) {
-				let enc = entry(this, channel);
-				for (let key in enc) {
-					process(key, enc[key]);
-				}
-			} else if (isFieldObject(channel, entry)) {
-				this.#channels.push(fieldEntry(channel, entry));
-			} else {
-				throw new Error(`Invalid encoding for channel ${channel}`);
-			}
-		};
-		let encodings = {
-			x: mplot.bin(options.column),
-			y: count(),
-		};
-		for (let [channel, entry] of Object.entries(encodings)) {
-			process(channel, entry);
-		}
-		if (options.filterBy) {
-			this.#interval = new mplot.Interval1D(this, {
-				channel: "x",
-				selection: this.filterBy,
-				field: this.#source.column,
-				brush: undefined,
-				peers: false,
-			});
-		}
+		// calls this.channelField internally
+		let bin = mplot.bin(options.column)(this, "x");
+		this.#select = { x1: bin.x1, x2: bin.x2, y: count() };
+		this.#interval = new mplot.Interval1D(this, {
+			channel: "x",
+			selection: this.filterBy,
+			field: this.#source.column,
+			brush: undefined,
+			peers: false,
+		});
 	}
 
-	fields() {
-		const fields = new Map();
-		for (let { field } of this.#channels) {
-			if (!field) continue;
-			let stats = field.stats?.stats || [];
-			let key = field.stats?.column ?? field;
-			let entry = fields.get(key);
-			if (!entry) {
-				entry = new Set();
-				fields.set(key, entry);
-			}
-			stats.forEach((s) => entry.add(s));
-		}
-		return Array.from(
-			fields,
-			([c, s]) => ({ table: this.#source.table, column: c, stats: s }),
-		);
+	fields(): Array<FieldRequest> {
+		return [
+			{
+				table: this.#source.table,
+				column: this.#source.column,
+				stats: ["min", "max"],
+			},
+		];
 	}
 
-	fieldInfo(info: Array<Info>) {
-		let lookup = Object.fromEntries(info.map((x) => [x.column, x]));
-		for (let entry of this.#channels) {
-			let { field } = entry;
-			if (field) {
-				Object.assign(entry, lookup[field.stats?.column ?? field]);
-			}
-		}
-		this.#fieldInfo = true;
+	fieldInfo(info: Array<FieldInfo>) {
+		this.#fieldInfo = info[0];
 		return this;
 	}
 
-	/** @param {string} channel */
-	channel(channel: string) {
-		return this.#channels.find((c) => c.channel === channel);
-	}
-
 	/**
-	 * @param {string} channel
-	 * @param {{ exact?: boolean }} [options]
-	 * @returns {Channel}
+	 * Required by `mplot.bin` to get the field info.
 	 */
-	channelField(
-		channel: string,
-		{ exact = false }: { exact?: boolean } = {},
-	): Channel {
-		assert(this.fieldInfo, "Field info not set");
-		let c = exact
-			? this.channel(channel)
-			: this.#channels.find((c) => c.channel.startsWith(channel));
-		assert(c, `Channel ${channel} not found`);
-		return c;
-	}
-
-	hasFieldInfo() {
-		return !!this.#fieldInfo;
+	channelField(channel: string): FieldInfo {
+		assert(channel === "x");
+		assert(this.#fieldInfo, "No field info yet");
+		return this.#fieldInfo;
 	}
 
 	/**
@@ -134,7 +93,11 @@ export class Histogram extends MosaicClient implements Mark {
 	 * @returns The client query
 	 */
 	query(filter?: Array<unknown>): Query {
-		return markQuery(this.#channels, this.#source.table).where(filter);
+		return Query
+			.from({ source: this.#source.table })
+			.select(this.#select)
+			.groupby(["x1", "x2"])
+			.where(filter);
 	}
 
 	/**
@@ -178,88 +141,4 @@ export class Histogram extends MosaicClient implements Mark {
 			},
 		};
 	}
-}
-
-/**
- * @param {string} channel
- * @param {CompleteField} field
- * @returns {Channel}
- */
-function fieldEntry(channel: string, field: CompleteField): Channel {
-	return {
-		channel,
-		field,
-		as: field instanceof Ref ? field.column : channel,
-	};
-}
-
-/**
- * @param {string} channel
- * @param {unknown} field
- * @returns {field is CompleteField}
- */
-function isFieldObject(
-	channel: string,
-	field: unknown,
-): field is CompleteField {
-	if (channel === "sort" || channel === "tip") {
-		return false;
-	}
-	return (
-		typeof field === "object" &&
-		field != null &&
-		!Array.isArray(field)
-	);
-}
-
-/**
- * @param {unknown} x
- * @returns {x is (mark: Mark, channel: string) => Record<string, CompleteField>}
- */
-function isTransform(
-	x: unknown,
-): x is (mark: Mark, channel: string) => Record<string, CompleteField> {
-	return typeof x === "function";
-}
-
-/**
- * Default query construction for a mark.
- *
- * Tracks aggregates by checking fields for an aggregate flag.
- * If aggregates are found, groups by all non-aggregate fields.
- *
- * @param {Array<Channel>} channels array of visual encoding channel specs.
- * @param {string} table the table to query.
- * @param {Array<string>} skip an optional array of channels to skip. Mark subclasses can skip channels that require special handling.
- * @returns {msql.Query} a Query instance
- */
-export function markQuery(
-	channels: Array<Channel>,
-	table: string,
-	skip: Array<string> = [],
-): Query {
-	let q = Query.from({ source: table });
-	let dims = new Set();
-	let aggr = false;
-
-	for (const c of channels) {
-		const { channel, field, as } = c;
-		if (skip.includes(channel)) continue;
-
-		if (channel === "orderby") {
-			q.orderby(c.value);
-		} else if (field) {
-			if (field.aggregate) {
-				aggr = true;
-			} else {
-				if (dims.has(as)) continue;
-				dims.add(as);
-			}
-			q.select({ [as]: field });
-		}
-	}
-	if (aggr) {
-		q.groupby(Array.from(dims));
-	}
-	return q;
 }
