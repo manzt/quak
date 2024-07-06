@@ -1,8 +1,8 @@
 import * as arrow from "apache-arrow";
 // @deno-types="../deps/mosaic-core.d.ts"
 import {
+	type FieldInfo,
 	type FieldRequest,
-	type Info,
 	MosaicClient,
 	Selection,
 } from "@uwdata/mosaic-core";
@@ -60,7 +60,7 @@ export class DataTable extends MosaicClient {
 	/** width of a column */
 	#columnWidth: number = 125;
 	/** height of the header */
-	#headerHeight: string = "50px";
+	#headerHeight: string = "94px";
 	/** the formatter for the data table entries */
 	#format: Record<string, (value: unknown) => string>;
 
@@ -182,7 +182,7 @@ export class DataTable extends MosaicClient {
 		this.coordinator.prefetch(query.clone().offset(offset + this.#limit));
 	}
 
-	fieldInfo(infos: Array<Info>) {
+	fieldInfo(infos: Array<FieldInfo>) {
 		let classes = classof(this.#meta.schema);
 
 		{

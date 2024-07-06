@@ -1,3 +1,6 @@
+// @deno-types="./deps/mosaic-core.d.ts";
+import type { FieldInfo } from "@uwdata/mosaic-core";
+
 export interface Bin {
 	x0: number;
 	x1: number;
@@ -10,33 +13,6 @@ export interface Bin {
 // mimics the `vgplot.Mark` client. We just don't need all the extra things in
 // vgplot (mainly Plot iself) for our use case so some of that code
 // is vendored in the repo.
-
-/**
- * TODO(Trevor): To be honest I don't really know what all the types are.
- *
- * My understanding is that this is an extension of the `fields()`
- * returned by a MosiacClient.
- */
-export interface CompleteField {
-	column: string;
-	label: string;
-	columns: string[];
-	basis: string;
-	stats: { column: string; stats: string[] };
-	toString: () => string;
-	aggregate?: boolean;
-}
-
-/**
- * Representing a visual channel in a visualization.
- */
-export interface Channel {
-	as: string;
-	field: CompleteField;
-	channel: string;
-	type?: string;
-	value?: number;
-}
 
 export type Scale<Range, Output> =
 	& {
@@ -64,5 +40,5 @@ export interface Mark {
 		getAttribute(name: string): unknown;
 	};
 	/** A helper to get the field for a channel */
-	channelField: (channel: string, opts?: { exact?: boolean }) => Channel;
+	channelField: (channel: string, opts?: { exact?: boolean }) => FieldInfo;
 }
