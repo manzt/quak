@@ -37,7 +37,11 @@ export class ValueCounts extends MosaicClient {
 	}
 
 	clause(value?: unknown) {
-		return clausePoint(this.#column, value, { source: this });
+		return clausePoint(
+			this.#column,
+			value === "__quak_null__" ? null : value,
+			{ source: this },
+		);
 	}
 
 	reset() {
@@ -55,8 +59,8 @@ export class ValueCounts extends MosaicClient {
 				count: count(),
 			})
 			.from(this.#table)
-			.where(filter)
-			.groupby("value");
+			.groupby("value")
+			.where(filter);
 		return Query
 			.with({ value_counts: valueCounts })
 			.select(
@@ -83,6 +87,7 @@ export class ValueCounts extends MosaicClient {
 				this.filterBy?.update(clause);
 			});
 		}
+		this.#plot.update(data);
 		return this;
 	}
 

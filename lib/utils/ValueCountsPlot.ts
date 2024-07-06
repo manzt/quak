@@ -93,7 +93,35 @@ export function ValueCountsPlot(
 	root.appendChild(container);
 	root.appendChild(text);
 	root.appendChild(hitArea);
-	return Object.assign(root, { selected });
+	return Object.assign(root, {
+		selected,
+		update(data: CountTableData) {
+			let { bins, nullCount, uniqueCount } = prepareData(data);
+			for (let bar of bars.elements) {
+				if (bar.title === "__quak_virtual__") {
+					continue;
+				}
+				let frac;
+				let color;
+				if (bar.title === "__quak_unique__") {
+					frac = uniqueCount / bar.data.total;
+					color = backgroundBarColor;
+				} else if (bar.title === "__quak_null__") {
+					frac = nullCount / bar.data.total;
+					color = nullFillColor;
+				} else {
+					let bin = bins.find((d) => d.key === bar.data.key);
+					frac = bin ? bin.total / bar.data.total : 0;
+					color = fillColor;
+				}
+				bar.style.background = createSplitBarFill({
+					color,
+					bgColor: backgroundBarColor,
+					frac,
+				});
+			}
+		},
+	});
 }
 
 function createBar(opts: {
@@ -107,7 +135,11 @@ function createBar(opts: {
 	let bar = document.createElement("div");
 	bar.title = title;
 	Object.assign(bar.style, {
-		background: fillColor,
+		background: createSplitBarFill({
+			color: fillColor,
+			bgColor: "var(--moon-gray)",
+			frac: 50,
+		}),
 		width: `${width}px`,
 		height: `${height}px`,
 		borderColor: "white",
@@ -404,4 +436,16 @@ function nearestX({ clientX }: MouseEvent, bars: Array<HTMLElement>) {
 			return bar;
 		}
 	}
+}
+
+/**
+ * Creates a fill gradient that is filled x% with a color and the rest with a background color.
+ */
+function createSplitBarFill(
+	options: { color: string; bgColor: string; frac: number },
+) {
+	let { color, bgColor, frac } = options;
+	let p = frac * 100;
+	// deno-fmt-ignore
+	return `linear-gradient(to top, ${color} ${p}%, ${bgColor} ${p}%, ${bgColor} ${100 - p}%)`;
 }
