@@ -225,13 +225,13 @@ export class DataTable extends MosaicClient {
 					table: this.#meta.table,
 					column: field.name,
 					type: info.type,
-					filterBy: this.filterBy,
+					filterBy: this.filterBy!,
 				});
 			} else {
 				vis = new ValueCounts({
 					table: this.#meta.table,
 					column: field.name,
-					filterBy: this.filterBy,
+					filterBy: this.filterBy!,
 				});
 			}
 			let th = thcol(field, this.#columnWidth, vis);
