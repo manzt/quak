@@ -54,7 +54,6 @@ export class Histogram extends MosaicClient implements Mark {
 		// calls this.channelField internally
 		let bin = mplot.bin(options.column)(this, "x");
 		this.#select = { x1: bin.x1, x2: bin.x2, y: count() };
-		console.log(this.#select);
 		this.#interval = new mplot.Interval1D(this, {
 			channel: "x",
 			selection: this.filterBy,
