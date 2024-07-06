@@ -91,6 +91,7 @@ export class Query {
 	groupby(...exprs: unknown[]): Query;
 	with(...exprs: unknown[]): Query;
 	clone(): Query;
+	toString(): string;
 }
 
 export declare function desc(column: string): SQLExpression;

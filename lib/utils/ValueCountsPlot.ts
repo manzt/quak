@@ -63,6 +63,7 @@ export function ValueCountsPlot(
 
 	let hovering = signal<string | undefined>(undefined);
 	let selected = signal<string | undefined>(undefined);
+	let counts = signal<CountTableData>(data);
 
 	let hitArea = document.createElement("div");
 	Object.assign(hitArea.style, {
@@ -87,41 +88,14 @@ export function ValueCountsPlot(
 
 	effect(() => {
 		text.textContent = bars.textFor(hovering.value ?? selected.value);
-		bars.highlight(hovering.value, selected.value);
+		bars.render(counts.value, hovering.value, selected.value);
 	});
 
 	root.appendChild(container);
 	root.appendChild(text);
 	root.appendChild(hitArea);
-	return Object.assign(root, {
-		selected,
-		update(data: CountTableData) {
-			let { bins, nullCount, uniqueCount } = prepareData(data);
-			for (let bar of bars.elements) {
-				if (bar.title === "__quak_virtual__") {
-					continue;
-				}
-				let frac;
-				let color;
-				if (bar.title === "__quak_unique__") {
-					frac = uniqueCount / bar.data.total;
-					color = backgroundBarColor;
-				} else if (bar.title === "__quak_null__") {
-					frac = nullCount / bar.data.total;
-					color = nullFillColor;
-				} else {
-					let bin = bins.find((d) => d.key === bar.data.key);
-					frac = bin ? bin.total / bar.data.total : 0;
-					color = fillColor;
-				}
-				bar.style.background = createSplitBarFill({
-					color,
-					bgColor: backgroundBarColor,
-					frac,
-				});
-			}
-		},
-	});
+
+	return Object.assign(root, { selected, data: counts });
 }
 
 function createBar(opts: {
@@ -195,16 +169,16 @@ function createBars(data: CountTableData, opts: {
 	backgroundBarColor: string;
 	nullFillColor: string;
 }) {
-	let { bins, uniqueCount, nullCount, total } = prepareData(data);
+	let source = prepareData(data);
 	let x = d3.scaleLinear()
-		.domain([0, total])
+		.domain([0, source.total])
 		.range([opts.marginLeft, opts.width - opts.marginRight]);
 
 	// number of bars to show before virtualizing
 	let thresh = 20;
 
 	let bars: Array<HTMLElement> = [];
-	for (let d of bins.slice(0, thresh)) {
+	for (let d of source.bins.slice(0, thresh)) {
 		let bar = createBar({
 			title: d.key,
 			fillColor: opts.fillColor,
@@ -220,8 +194,11 @@ function createBars(data: CountTableData, opts: {
 	let hoverBar = createVirtualSelectionBar(opts);
 	let selectBar = createVirtualSelectionBar(opts);
 	let virtualBar: HTMLElement | undefined;
-	if (bins.length > thresh) {
-		let total = bins.slice(thresh).reduce((acc, d) => acc + d.total, 0);
+	if (source.bins.length > thresh) {
+		let total = source.bins.slice(thresh).reduce(
+			(acc, d) => acc + d.total,
+			0,
+		);
 		virtualBar = Object.assign(document.createElement("div"), {
 			title: "__quak_virtual__",
 		});
@@ -244,42 +221,42 @@ function createBars(data: CountTableData, opts: {
 		virtualBar.appendChild(hoverBar);
 		virtualBar.appendChild(selectBar);
 		Object.defineProperty(virtualBar, "data", {
-			value: bins.slice(thresh),
+			value: source.bins.slice(thresh),
 		});
 		bars.push(virtualBar);
 	}
 
-	if (uniqueCount) {
+	if (source.uniqueCount) {
 		let bar = createBar({
 			title: "unique",
 			fillColor: opts.backgroundBarColor,
 			textColor: "var(--mid-gray)",
-			width: x(uniqueCount),
+			width: x(source.uniqueCount),
 			height: opts.height,
 		});
 		bar.title = "__quak_unique__";
 		Object.defineProperty(bar, "data", {
 			value: {
 				key: "__quak_unique__",
-				total: uniqueCount,
+				total: source.uniqueCount,
 			},
 		});
 		bars.push(bar);
 	}
 
-	if (nullCount) {
+	if (source.nullCount) {
 		let bar = createBar({
 			title: "null",
 			fillColor: opts.nullFillColor,
 			textColor: "white",
-			width: x(nullCount),
+			width: x(source.nullCount),
 			height: opts.height,
 		});
 		bar.title = "__quak_null__";
 		Object.defineProperty(bar, "data", {
 			value: {
 				key: "__quak_null__",
-				total: nullCount,
+				total: source.nullCount,
 			},
 		});
 		bars.push(bar);
@@ -320,8 +297,20 @@ function createBars(data: CountTableData, opts: {
 				// @ts-expect-error - we set this above
 				let vbars: HTMLDivElement = bar.firstChild!;
 				vbars.style.opacity = opactiy.toString();
+				vbars.style.background = virtualBarRepeatingBackground({
+					color: opts.fillColor,
+				});
 			} else {
+				let color = {
+					"__quak_unique__": opts.backgroundBarColor,
+					"__quak_null__": opts.nullFillColor,
+				}[bar.title] ?? opts.fillColor;
 				bar.style.opacity = opactiy.toString();
+				bar.style.background = createSplitBarFill({
+					color,
+					bgColor: opts.backgroundBarColor,
+					frac: 1,
+				});
 			}
 			bar.style.borderColor = "white";
 			bar.style.borderWidth = "0px 1px 0px 0px";
@@ -359,6 +348,10 @@ function createBars(data: CountTableData, opts: {
 		selectBar.style.visibility = "visible";
 	}
 
+	let counts: Record<string, number> = Object.fromEntries(
+		Array.from(data.toArray(), (d) => [d.key, d.total]),
+	);
+
 	return {
 		elements: bars,
 		nearestX(event: MouseEvent): string | undefined {
@@ -375,8 +368,38 @@ function createBars(data: CountTableData, opts: {
 			let idx = Math.floor((mouseX / rect.width) * data.length);
 			return data[idx].key;
 		},
-		highlight(hovering?: string, selected?: string) {
+		render(data: CountTableData, hovering?: string, selected?: string) {
 			reset(hovering || selected ? 0.4 : 1);
+			let update: Record<string, number> = Object.fromEntries(
+				Array.from(data.toArray(), (d) => [d.key, d.total]),
+			);
+			let total = Object.values(update).reduce((a, b) => a + b, 0);
+			for (let bar of bars) {
+				if (bar.title === "__quak_virtual__") {
+					let vbars = bar.firstChild as HTMLDivElement;
+					vbars.style.background = virtualBarRepeatingBackground({
+						color: total < source.total
+							? opts.backgroundBarColor
+							: opts.fillColor,
+					});
+					continue;
+				}
+				let frac = counts[bar.title]
+					? update[bar.title] / counts[bar.title]
+					: 0;
+				let color = {
+					"__quak_unique__": opts.backgroundBarColor,
+					"__quak_null__": opts.nullFillColor,
+				}[bar.title] ?? opts.fillColor;
+				if (selected) {
+					frac = bar.title === selected ? frac : 0;
+				}
+				bar.style.background = createSplitBarFill({
+					color,
+					bgColor: opts.backgroundBarColor,
+					frac: isNaN(frac) ? 0 : frac,
+				});
+			}
 			if (hovering) hover(hovering);
 			if (selected) select(selected);
 		},
@@ -386,8 +409,8 @@ function createBars(data: CountTableData, opts: {
 				return `${ncats.toLocaleString()} categor${ncats === 1 ? "y" : "ies"}`;
 			}
 			if (key === "__quak_unique__") {
-				return `${uniqueCount.toLocaleString()} unique value${
-					uniqueCount === 1 ? "" : "s"
+				return `${source.uniqueCount.toLocaleString()} unique value${
+					source.uniqueCount === 1 ? "" : "s"
 				}`;
 			}
 			if (key === "__quak_null__") {
@@ -396,6 +419,10 @@ function createBars(data: CountTableData, opts: {
 			return key;
 		},
 	};
+}
+
+function virtualBarRepeatingBackground({ color }: { color: string }) {
+	return `repeating-linear-gradient(to right, ${color} 0px, ${color} 1px, white 1px, white 2px)`;
 }
 
 function createTextOutput() {
