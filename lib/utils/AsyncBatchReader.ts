@@ -1,5 +1,25 @@
 import { assert } from "./assert.ts";
 
+/**
+ * An async iterator that reads data in batches from an async source.
+ *
+ * @example
+ * ```ts
+ * let i = 0;
+ * let batches = [[1, 2, 3], [4, 5, 6]];
+ * let requestNextBatch = async () => {
+ *   // simulate fetching a batch
+ *   await new Promise((resolve) => setTimeout(resolve, 1000));
+ *   let batch = batches.shift();
+ *   reader.enqueueBatch(batch, { last: batches.length === 0 });
+ * };
+ * let reader = new AsyncBatchReader(requestNextBatch);
+ *
+ * for await (let { row, index } of reader) {
+ *   console.log(row, index);
+ * }
+ * ```
+ */
 export class AsyncBatchReader<T> {
 	/** the iterable batches to read */
 	#batches: Array<{ data: Iterator<T>; last: boolean }> = [];
