@@ -12,6 +12,12 @@
 	--stone-blue: #64748b;
 	--yellow-gold: #ca8a04;
 
+	--teal: #027982;
+	--dark-pink: #D35A5F;
+
+	--light-blue: #7E93CF;
+	--dark-yellow-gold: #A98447;
+
 	--primary: var(--stone-blue);
 	--secondary: var(--yellow-gold);
 }
