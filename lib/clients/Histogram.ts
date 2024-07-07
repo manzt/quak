@@ -56,7 +56,6 @@ export class Histogram extends MosaicClient implements Mark {
 			selection: this.filterBy,
 			field: this.#source.column,
 			brush: undefined,
-			peers: false,
 		});
 	}
 
