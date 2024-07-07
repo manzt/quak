@@ -16,7 +16,7 @@ export interface Clause<Source> {
 }
 
 export class Selection {
-	predicate(client: MosaicClient): Array<SQLExpression>;
+	predicate(client?: MosaicClient): Array<SQLExpression>;
 	static crossfilter(): Selection;
 	clauses: Array<Clause<Interactor>>;
 	update(clause: Clause<unknown>): void;

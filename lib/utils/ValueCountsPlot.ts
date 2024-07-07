@@ -297,17 +297,17 @@ function createBars(data: CountTableData, opts: {
 				// @ts-expect-error - we set this above
 				let vbars: HTMLDivElement = bar.firstChild!;
 				vbars.style.opacity = opactiy.toString();
-				vbars.style.background = virtualBarRepeatingBackground({
+				vbars.style.background = createVirtualBarRepeatingBackground({
 					color: opts.fillColor,
 				});
 			} else {
-				let color = {
-					"__quak_unique__": opts.backgroundBarColor,
-					"__quak_null__": opts.nullFillColor,
-				}[bar.title] ?? opts.fillColor;
 				bar.style.opacity = opactiy.toString();
 				bar.style.background = createSplitBarFill({
-					color,
+					color: bar.title === "__quak_unique__"
+						? opts.backgroundBarColor
+						: bar.title === "__quak_null__"
+						? opts.nullFillColor
+						: opts.fillColor,
 					bgColor: opts.backgroundBarColor,
 					frac: 1,
 				});
@@ -321,15 +321,15 @@ function createBars(data: CountTableData, opts: {
 		selectBar.style.visibility = "hidden";
 	}
 
-	function hover(key: string) {
+	function hover(key: string, selected?: string) {
 		let bar = bars.find((b) => b.title === key);
 		if (bar) {
 			bar.style.opacity = "1";
 			return;
 		}
 		let vbin = virtualBin(key);
-		hoverBar.style.opacity = "1";
 		hoverBar.title = vbin.key;
+		hoverBar.style.opacity = selected ? "0.25" : "1";
 		hoverBar.style.left = `${vbin.x}px`;
 		hoverBar.style.visibility = "visible";
 	}
@@ -377,30 +377,26 @@ function createBars(data: CountTableData, opts: {
 			for (let bar of bars) {
 				if (bar.title === "__quak_virtual__") {
 					let vbars = bar.firstChild as HTMLDivElement;
-					vbars.style.background = virtualBarRepeatingBackground({
-						color: total < source.total
+					vbars.style.background = createVirtualBarRepeatingBackground({
+						color: (total < source.total) || selected
 							? opts.backgroundBarColor
 							: opts.fillColor,
 					});
-					continue;
+				} else {
+					let frac = (update[bar.title] ?? 0) / counts[bar.title];
+					if (selected) frac = bar.title === selected ? frac : 0;
+					bar.style.background = createSplitBarFill({
+						color: bar.title === "__quak_unique__"
+							? opts.backgroundBarColor
+							: bar.title === "__quak_null__"
+							? opts.nullFillColor
+							: opts.fillColor,
+						bgColor: opts.backgroundBarColor,
+						frac: isNaN(frac) ? 0 : frac,
+					});
 				}
-				let frac = counts[bar.title]
-					? update[bar.title] / counts[bar.title]
-					: 0;
-				let color = {
-					"__quak_unique__": opts.backgroundBarColor,
-					"__quak_null__": opts.nullFillColor,
-				}[bar.title] ?? opts.fillColor;
-				if (selected) {
-					frac = bar.title === selected ? frac : 0;
-				}
-				bar.style.background = createSplitBarFill({
-					color,
-					bgColor: opts.backgroundBarColor,
-					frac: isNaN(frac) ? 0 : frac,
-				});
 			}
-			if (hovering) hover(hovering);
+			if (hovering) hover(hovering, selected);
 			if (selected) select(selected);
 		},
 		textFor(key?: string): string {
@@ -419,10 +415,6 @@ function createBars(data: CountTableData, opts: {
 			return key;
 		},
 	};
-}
-
-function virtualBarRepeatingBackground({ color }: { color: string }) {
-	return `repeating-linear-gradient(to right, ${color} 0px, ${color} 1px, white 1px, white 2px)`;
 }
 
 function createTextOutput() {
@@ -475,4 +467,8 @@ function createSplitBarFill(
 	let p = frac * 100;
 	// deno-fmt-ignore
 	return `linear-gradient(to top, ${color} ${p}%, ${bgColor} ${p}%, ${bgColor} ${100 - p}%)`;
+}
+
+function createVirtualBarRepeatingBackground({ color }: { color: string }) {
+	return `repeating-linear-gradient(to right, ${color} 0px, ${color} 1px, white 1px, white 2px)`;
 }

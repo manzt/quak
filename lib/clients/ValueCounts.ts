@@ -45,7 +45,7 @@ export class ValueCounts extends MosaicClient {
 		// Here we manually listen for the changes to filterBy and update this
 		// client internally. It _should_ go through the coordinator.
 		options.filterBy.addEventListener("value", async () => {
-			let filters = options.filterBy.predicate(this);
+			let filters = options.filterBy.predicate();
 			let query = this.query(filters);
 			if (this.#plot) {
 				let data = await this.coordinator.query(query);
