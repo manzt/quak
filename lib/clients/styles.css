@@ -18,6 +18,8 @@
 	--light-blue: #7E93CF;
 	--dark-yellow-gold: #A98447;
 
+	--purple: #987fd3;
+
 	--primary: var(--stone-blue);
 	--secondary: var(--yellow-gold);
 }
