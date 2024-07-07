@@ -21,8 +21,10 @@ interface UniqueValuesOptions {
 	/** The column to use for the histogram. */
 	column: string;
 	/** A mosaic selection to filter the data. */
-	filterBy?: Selection;
+	filterBy: Selection;
 }
+
+type CountTable = arrow.Table<{ key: arrow.Utf8; total: arrow.Int }>;
 
 export class ValueCounts extends MosaicClient {
 	#table: string;
@@ -34,19 +36,27 @@ export class ValueCounts extends MosaicClient {
 		super(options.filterBy);
 		this.#table = options.table;
 		this.#column = options.column;
+
+		// FIXME: There is some issue with the mosaic client or the query we
+		// are using here. Updates to the Selection (`filterBy`) seem to be
+		// missed by the coordinator, and query/queryResult are not called
+		// by the coordinator when the filterBy is updated.
+		//
+		// Here we manually listen for the changes to filterBy and update this
+		// client internally. It _should_ go through the coordinator.
+		options.filterBy.addEventListener("value", async () => {
+			let filters = options.filterBy.predicate();
+			let query = this.query(filters);
+			if (this.#plot) {
+				let data = await this.coordinator.query(query);
+				this.#plot.data.value = data;
+			}
+		});
 	}
 
-	clause(value?: unknown) {
-		return clausePoint(this.#column, value, { source: this });
-	}
-
-	reset() {
-		assert(this.#plot, "ValueCounts plot not initialized");
-		this.#plot.selected.value = undefined;
-	}
-
-	query(filter: Array<SQLExpression>): Query {
-		let valueCounts = Query
+	query(filter: Array<SQLExpression> = []): Query {
+		let counts = Query
+			.from({ source: this.#table })
 			.select({
 				value: sql`CASE
 					WHEN ${column(this.#column)} IS NULL THEN '__quak_null__'
@@ -54,11 +64,10 @@ export class ValueCounts extends MosaicClient {
 				END`,
 				count: count(),
 			})
-			.from(this.#table)
-			.where(filter)
-			.groupby("value");
+			.groupby("value")
+			.where(filter);
 		return Query
-			.with({ value_counts: valueCounts })
+			.with({ counts })
 			.select(
 				{
 					key: sql`CASE
@@ -68,22 +77,34 @@ export class ValueCounts extends MosaicClient {
 					total: sum("count"),
 				},
 			)
-			.from("value_counts")
+			.from("counts")
 			.groupby("key");
 	}
 
-	queryResult(
-		data: arrow.Table<{ key: arrow.Utf8; total: arrow.Int }>, // type comes from the query above
-	): this {
+	queryResult(data: CountTable): this {
 		if (!this.#plot) {
-			this.#plot = ValueCountsPlot(data);
-			this.#el.appendChild(this.#plot);
+			let plot = this.#plot = ValueCountsPlot(data);
+			this.#el.appendChild(plot);
 			effect(() => {
-				let clause = this.clause(this.#plot!.selected.value);
-				this.filterBy?.update(clause);
+				let clause = this.clause(plot.selected.value);
+				this.filterBy!.update(clause);
 			});
+		} else {
+			this.#plot.data.value = data;
 		}
 		return this;
+	}
+
+	clause<T>(value?: T) {
+		let update = value === "__quak_null__" ? null : value;
+		return clausePoint(this.#column, update, {
+			source: this,
+		});
+	}
+
+	reset() {
+		assert(this.#plot, "ValueCounts plot not initialized");
+		this.#plot.selected.value = undefined;
 	}
 
 	get plot() {

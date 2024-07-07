@@ -16,10 +16,11 @@ export interface Clause<Source> {
 }
 
 export class Selection {
-	predicate(client: MosaicClient): Array<unknown>;
+	predicate(client?: MosaicClient): Array<SQLExpression>;
 	static crossfilter(): Selection;
 	clauses: Array<Clause<Interactor>>;
 	update(clause: Clause<unknown>): void;
+	activate(clause: Clause<unknown>): void;
 	addEventListener(event: "activate", listener: () => void): void;
 	addEventListener<T = unknown>(
 		event: "value",
@@ -144,5 +145,5 @@ type Logger = typeof console & {
 export declare function clausePoint<T>(
 	field: string,
 	value: unknown,
-	options: { source: T },
+	options: { source: T; clients?: Set<MosaicClient> },
 ): Clause<T>;

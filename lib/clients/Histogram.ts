@@ -13,7 +13,7 @@ import type * as arrow from "apache-arrow";
 
 import { CrossfilterHistogramPlot } from "../utils/CrossfilterHistogramPlot.ts";
 
-import type { Bin, Mark, Scale } from "../types.ts";
+import type { Mark } from "../types.ts";
 import { assert } from "../utils/assert.ts";
 
 /** An options bag for the Histogram Mosiac client. */
@@ -28,9 +28,10 @@ interface HistogramOptions {
 	filterBy: Selection;
 }
 
+type BinTable = arrow.Table<{ x1: arrow.Int; x2: arrow.Int; y: arrow.Int }>;
+
 /** Represents a Cross-filtered Histogram */
 export class Histogram extends MosaicClient implements Mark {
-	type = "rectY";
 	#source: { table: string; column: string; type: "number" | "date" };
 	#el: HTMLElement = document.createElement("div");
 	#select: {
@@ -41,12 +42,8 @@ export class Histogram extends MosaicClient implements Mark {
 	#interval: mplot.Interval1D | undefined = undefined;
 	#initialized: boolean = false;
 	#fieldInfo: FieldInfo | undefined;
-	svg:
-		| SVGSVGElement & {
-			scale: (type: string) => Scale<number, number>;
-			update(bins: Bin[], opts: { nullCount: number }): void;
-		}
-		| undefined;
+
+	svg: ReturnType<typeof CrossfilterHistogramPlot> | undefined;
 
 	constructor(options: HistogramOptions) {
 		super(options.filterBy);
@@ -77,22 +74,12 @@ export class Histogram extends MosaicClient implements Mark {
 		this.#fieldInfo = info[0];
 		return this;
 	}
-
-	/**
-	 * Required by `mplot.bin` to get the field info.
-	 */
-	channelField(channel: string): FieldInfo {
-		assert(channel === "x");
-		assert(this.#fieldInfo, "No field info yet");
-		return this.#fieldInfo;
-	}
-
 	/**
 	 * Return a query specifying the data needed by this Mark client.
 	 * @param filter The filtering criteria to apply in the query.
 	 * @returns The client query
 	 */
-	query(filter?: Array<unknown>): Query {
+	query(filter: Array<SQLExpression> = []): Query {
 		return Query
 			.from({ source: this.#source.table })
 			.select(this.#select)
@@ -102,11 +89,8 @@ export class Histogram extends MosaicClient implements Mark {
 
 	/**
 	 * Provide query result data to the mark.
-	 * @param {arrow.Table<{ x1: arrow.Int, x2: arrow.Int, y: arrow.Int }>} data
 	 */
-	queryResult(
-		data: arrow.Table<{ x1: arrow.Int; x2: arrow.Int; y: arrow.Int }>,
-	) {
+	queryResult(data: BinTable) {
 		let bins = Array.from(data, (d) => ({
 			x0: d.x1,
 			x1: d.x2,
@@ -132,10 +116,17 @@ export class Histogram extends MosaicClient implements Mark {
 		return this;
 	}
 
+	/* Required by the Mark interface */
+	type = "rectY";
+	/** Required by `mplot.bin` to get the field info. */
+	channelField(channel: string): FieldInfo {
+		assert(channel === "x");
+		assert(this.#fieldInfo, "No field info yet");
+		return this.#fieldInfo;
+	}
 	get plot() {
 		return {
 			node: () => this.#el,
-			/** @param {string} _name */
 			getAttribute(_name: string) {
 				return undefined;
 			},
