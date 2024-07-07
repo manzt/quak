@@ -52,7 +52,7 @@ export class DataTable extends MosaicClient {
 	/** number of rows to fetch */
 	#limit: number = 100;
 	/** whether an internal request is pending */
-	#pending: boolean = false;
+	#pendingInternalRequest: boolean = false;
 	/** number of rows to display */
 	#rows: number = 11.5;
 	/** height of a row */
@@ -72,7 +72,7 @@ export class DataTable extends MosaicClient {
 	constructor(source: DataTableOptions) {
 		super(Selection.crossfilter());
 		this.#format = formatof(source.schema);
-		this.#pending = false;
+		this.#pendingInternalRequest = false;
 		this.#meta = source;
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
@@ -146,28 +146,30 @@ export class DataTable extends MosaicClient {
 	 * A mosiac lifecycle function that is called with the results from `query`.
 	 * Must be synchronous, and return `this`.
 	 */
-	queryResult(data: arrow.Table) {
-		if (!this.#pending) {
+	queryResult(table: arrow.Table) {
+		if (!this.#pendingInternalRequest) {
 			// data is not from an internal request, so reset table
 			this.#reader = new AsyncBatchReader(() => {
-				this.#pending = true;
+				this.#pendingInternalRequest = true;
 				this.requestData(this.#offset + this.#limit);
 			});
 			this.#tbody.replaceChildren();
+			this.#tableRoot.scrollTop = 0;
 			this.#offset = 0;
 		}
-		this.#reader?.enqueueBatch(data[Symbol.iterator](), {
-			last: data.numRows < this.#limit,
+		let batch = table[Symbol.iterator]();
+		this.#reader?.enqueueBatch(batch, {
+			last: table.numRows < this.#limit,
 		});
 		return this;
 	}
 
 	update() {
-		if (!this.#pending) {
+		if (!this.#pendingInternalRequest) {
 			// on the first update, populate the table with initial data
 			this.#appendRows(this.#rows * 2);
 		}
-		this.#pending = false;
+		this.#pendingInternalRequest = false;
 		return this;
 	}
 
