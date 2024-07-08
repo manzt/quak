@@ -160,6 +160,8 @@ function prepareData(data: CountTableData) {
 	};
 }
 
+type Entry = { key: string; total: number };
+
 function createBars(data: CountTableData, opts: {
 	width: number;
 	height: number;
@@ -177,7 +179,7 @@ function createBars(data: CountTableData, opts: {
 	// number of bars to show before virtualizing
 	let thresh = 20;
 
-	let bars: Array<HTMLElement> = [];
+	let bars: Array<HTMLElement & { data: Entry }> = [];
 	for (let d of source.bins.slice(0, thresh)) {
 		let bar = createBar({
 			title: d.key,
@@ -186,8 +188,7 @@ function createBars(data: CountTableData, opts: {
 			width: x(d.total),
 			height: opts.height,
 		});
-		Object.defineProperty(bar, "data", { value: d });
-		bars.push(bar);
+		bars.push(Object.assign(bar, { data: d }));
 	}
 
 	// TODO: create a div "hover" bar for this "area" of the visualization
@@ -223,6 +224,8 @@ function createBars(data: CountTableData, opts: {
 		Object.defineProperty(virtualBar, "data", {
 			value: source.bins.slice(thresh),
 		});
+		// @ts-expect-error - data is different for virtual bar...
+		// TODO: need to represent difference in types
 		bars.push(virtualBar);
 	}
 
@@ -235,13 +238,12 @@ function createBars(data: CountTableData, opts: {
 			height: opts.height,
 		});
 		bar.title = "__quak_unique__";
-		Object.defineProperty(bar, "data", {
-			value: {
+		bars.push(Object.assign(bar, {
+			data: {
 				key: "__quak_unique__",
 				total: source.uniqueCount,
 			},
-		});
-		bars.push(bar);
+		}));
 	}
 
 	if (source.nullCount) {
@@ -253,13 +255,12 @@ function createBars(data: CountTableData, opts: {
 			height: opts.height,
 		});
 		bar.title = "__quak_null__";
-		Object.defineProperty(bar, "data", {
-			value: {
+		bars.push(Object.assign(bar, {
+			data: {
 				key: "__quak_null__",
-				total: source.nullCount,
+				total: source.uniqueCount,
 			},
-		});
-		bars.push(bar);
+		}));
 	}
 
 	let first = bars[0];
@@ -322,21 +323,22 @@ function createBars(data: CountTableData, opts: {
 	}
 
 	function hover(key: string, selected?: string) {
-		let bar = bars.find((b) => b.title === key);
-		if (bar) {
+		let bar = bars.find((b) => b.data.key === key);
+		if (bar !== undefined) {
 			bar.style.opacity = "1";
 			return;
 		}
 		let vbin = virtualBin(key);
 		hoverBar.title = vbin.key;
+		hoverBar.data = vbin;
 		hoverBar.style.opacity = selected ? "0.25" : "1";
 		hoverBar.style.left = `${vbin.x}px`;
 		hoverBar.style.visibility = "visible";
 	}
 
 	function select(key: string) {
-		let bar = bars.find((b) => b.title === key);
-		if (bar) {
+		let bar = bars.find((b) => b.data.key === key);
+		if (bar !== undefined) {
 			bar.style.opacity = "1";
 			bar.style.boxShadow = "inset 0 0 0 1.2px black";
 			return;
@@ -344,6 +346,7 @@ function createBars(data: CountTableData, opts: {
 		let vbin = virtualBin(key);
 		selectBar.style.opacity = "1";
 		selectBar.title = vbin.key;
+		selectBar.data = vbin;
 		selectBar.style.left = `${vbin.x}px`;
 		selectBar.style.visibility = "visible";
 	}
@@ -383,8 +386,9 @@ function createBars(data: CountTableData, opts: {
 							: opts.fillColor,
 					});
 				} else {
-					let frac = (update[bar.title] ?? 0) / counts[bar.title];
-					if (selected) frac = bar.title === selected ? frac : 0;
+					let key: string = bar.data.key;
+					let frac = (update[key] ?? 0) / counts[key];
+					if (selected) frac = key === selected ? frac : 0;
 					bar.style.background = createSplitBarFill({
 						color: bar.title === "__quak_unique__"
 							? opts.backgroundBarColor
@@ -396,8 +400,12 @@ function createBars(data: CountTableData, opts: {
 					});
 				}
 			}
-			if (hovering) hover(hovering, selected);
-			if (selected) select(selected);
+			if (hovering !== undefined) {
+				hover(hovering, selected);
+			}
+			if (selected !== undefined) {
+				select(selected);
+			}
 		},
 		textFor(key?: string): string {
 			if (key === undefined) {
@@ -412,7 +420,7 @@ function createBars(data: CountTableData, opts: {
 			if (key === "__quak_null__") {
 				return "null";
 			}
-			return key;
+			return key.toString();
 		},
 	};
 }
@@ -444,7 +452,9 @@ function createVirtualSelectionBar(opts: { fillColor: string }) {
 		pointerEvents: "none",
 		visibility: "hidden",
 	});
-	return node;
+	return Object.assign(node, {
+		data: { key: "", total: 0 },
+	});
 }
 
 function nearestX({ clientX }: MouseEvent, bars: Array<HTMLElement>) {

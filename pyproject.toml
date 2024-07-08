@@ -12,6 +12,10 @@ dependencies = [
 ]
 readme = "README.md"
 
+[tool.hatch.build]
+only-packages = true
+artifacts = ["src/quak/widget.js"]
+
 [tool.rye]
 dev-dependencies = [
     "jupyterlab>=4.2.2",
