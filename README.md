@@ -34,6 +34,7 @@ Alternatively, you can use `quak.Widget` directly:
 
 ```python
 import polars as pl
+import quak
 
 df = pl.read_csv("https://raw.githubusercontent.com/vega/vega-datasets/main/data/airports.csv")
 quak.Widget(df)
