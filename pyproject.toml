@@ -7,7 +7,7 @@ name = "quak"
 version = "0.0.0"
 dependencies = [
     "anywidget",
-    "pyarrow>=16.1.0",
+    "pyarrow>=16.0.0",
     "duckdb>=1.0.0"
 ]
 readme = "README.md"
