@@ -3,6 +3,10 @@
 an [anywidget](https://github.com/manzt/anywidget) for data that talks like a
 duck
 
+> [!WARNING]
+> Here be dragons 🐉. `quak` is a prototype and not production-ready. Expect bugs.
+> The library is open-sourced for SciPy 2024.
+
 ## install
 
 ```sh
