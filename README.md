@@ -86,11 +86,3 @@ rye format
 > with npm and `node_modules`. With Deno there is no `node_modules`, and the
 > tool handles type-checking, linting, and formatting. The extra build scripts
 > serve to make nice development ergonamics within and outside of Jupyter.
-
-# is quak open source?
-
-Right now technically not (no license file). It will be full open source, but
-I'm not sure what license to choose yet (leaning towards MIT).
-
-I will add a license prior to opening up the repository. During the private
-phase, I'll continue with a no license project.
