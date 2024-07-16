@@ -102,9 +102,8 @@ export class DataTable extends mc.MosaicClient {
 			maxHeight = `${source.height}px`;
 		}
 
-		let root: HTMLDivElement = html`<div class="quak" style=${{
-			maxHeight,
-		}}>`;
+		// @deno-fmt-ignore
+		let root: HTMLDivElement = html`<div class="quak" style=${{ maxHeight }}>`;
 		// @deno-fmt-ignore
 		root.appendChild(
 			html.fragment`<table style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
