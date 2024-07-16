@@ -2,7 +2,7 @@
 import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 
-import { DataTable } from "./clients/DataTable.ts";
+import { datatable } from "./clients/DataTable.ts";
 
 let table: keyof typeof datasets = "athletes";
 let base = new URL(
@@ -34,24 +34,8 @@ await coordinator.exec([
 	msql.loadCSV(table, datasets[table]),
 ]);
 
-// TODO: This should be a helper function
-let empty = await coordinator.query(
-	msql.Query
-		.from(table)
-		.select("*")
-		// .select("name", "nationality", "sport", "info")
-		.limit(0)
-		.toString(),
-);
-
-let datatable = new DataTable({
-	table,
-	schema: empty.schema,
-	height: 500,
-});
-
-coordinator.connect(datatable);
-document.body.appendChild(datatable.node());
+let client = await datatable(table, { coordinator, height: 500 });
+document.body.appendChild(client.node());
 
 // A Vite-specific feature that allows hot-reloading of modules. This way we
 // don't need to reload DuckDB or the data when we make changes to the
@@ -59,16 +43,12 @@ document.body.appendChild(datatable.node());
 //
 // @see https://vitejs.dev/guide/api-hmr
 // @ts-expect-error - import.meta.hot not coming from Deno
-import.meta.hot?.accept("./clients/DataTable.ts", (mod) => {
-	coordinator.disconnect(datatable);
-	document.body.removeChild(datatable.node());
-	datatable = new mod.DataTable({
-		table,
-		schema: empty.schema,
-		height: 500,
-	});
-	coordinator.connect(datatable);
-	document.body.appendChild(datatable.node());
+import.meta.hot?.accept("./clients/DataTable.ts", async (mod) => {
+	coordinator.disconnect(client);
+	document.body.removeChild(client.node());
+	client = await mod.datatable(table, { coordinator, height: 500 });
+	coordinator.connect(client);
+	document.body.appendChild(client.node());
 });
 
 function _voidLogger() {
