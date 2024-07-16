@@ -1,5 +1,6 @@
 use anyhow::Result;
 use arrow::ipc::writer::FileWriter;
+use tauri::Manager;
 
 #[tauri::command]
 async fn query(
@@ -68,6 +69,14 @@ impl Database {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(debug_assertions)] // only include this code on debug builds
+            {
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+            }
+            Ok(())
+        })
         .manage(Database::new(10).unwrap())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![query, exec])

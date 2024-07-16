@@ -38,7 +38,6 @@
 		"@tauri-apps/api": "https://esm.sh/@tauri-apps/api@^2.0.0-beta.15",
 		"@tauri-apps/api/core": "https://esm.sh/@tauri-apps/api@^2.0.0-beta.15/core",
 		"@tauri-apps/plugin-dialog": "https://esm.sh/@tauri-apps/plugin-dialog@^2.0.0-beta.7",
-		"@tauri-apps/plugin-fs": "https://esm.sh/@tauri-apps/plugin-fs@^2.0.0-beta.7",
-		"@tauri-apps/plugin-shell": "https://esm.sh/@tauri-apps/plugin-shell@^2.0.0-beta.8"
+		"@tauri-apps/plugin-cli": "https://esm.sh/@tauri-apps/plugin-cli@^2.0.0-beta.22"
 	}
 }

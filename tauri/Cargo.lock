@@ -1245,7 +1245,6 @@ dependencies = [
  "rust_decimal",
  "smallvec",
  "strum 0.25.0",
- "url",
 ]
 
 [[package]]

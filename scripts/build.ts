@@ -61,5 +61,11 @@ if (Deno.args.includes("--watch")) {
 			importMapURL: new URL("deno.json", root).href,
 		})];
 	}
+	if (Deno.args.includes("--tauri")) {
+		options.entryPoints = ["./tauri/app.js"];
+		options.outfile = "./tauri/dist/app.js";
+	}
 	await esbuild.build(options);
 }
+
+Deno.copyFile("./tauri/index.html", "./tauri/dist/index.html");

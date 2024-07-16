@@ -385,7 +385,7 @@ function thcol(
 	// @deno-fmt-ignore
 	let th: HTMLTableCellElement = html`<th style=${{ overflow: "hidden" }}>
 		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
+			<span style=${{ userSelect: "text", marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
 			${sortButton}
 		</div>
 		${verticalResizeHandle}
