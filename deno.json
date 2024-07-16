@@ -8,13 +8,21 @@
 	},
 	"fmt": {
 		"useTabs": true,
-		"exclude": [".venv", "src", "examples", "README.md"]
+		"exclude": [
+			".venv",
+			"src",
+			"examples",
+			"README.md",
+			"dist",
+			"tauri/dist",
+			"tauri/target"
+		]
 	},
 	"lint": {
 		"rules": {
 			"exclude": ["prefer-const"]
 		},
-		"exclude": [".venv", "src", "examples"]
+		"exclude": [".venv", "src", "examples", "tauri/dist", "tauri/target"]
 	},
 	"compilerOptions": {
 		"verbatimModuleSyntax": true,
