@@ -120,6 +120,12 @@ export class DataTable extends mc.MosaicClient {
 		});
 	}
 
+	resize(height: number) {
+		this.#rows = Math.floor(height / this.#rowHeight);
+		this.#tableRoot.style.maxHeight = `${height}px`;
+		this.#tableRoot.scrollTop = 0;
+	}
+
 	get sql() {
 		return this.#sql.value;
 	}

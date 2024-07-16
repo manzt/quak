@@ -34,7 +34,10 @@ await coordinator.exec([
 	msql.loadCSV(table, datasets[table]),
 ]);
 
-let client = await datatable(table, { coordinator, height: 500 });
+const height = () => globalThis.innerHeight - 45;
+globalThis.onresize = () => client.resize(height());
+
+let client = await datatable(table, { coordinator, height: height() });
 document.body.appendChild(client.node());
 
 // A Vite-specific feature that allows hot-reloading of modules. This way we
@@ -46,7 +49,7 @@ document.body.appendChild(client.node());
 import.meta.hot?.accept("./clients/DataTable.ts", async (mod) => {
 	coordinator.disconnect(client);
 	document.body.removeChild(client.node());
-	client = await mod.datatable(table, { coordinator, height: 500 });
+	client = await mod.datatable(table, { coordinator, height: height() });
 	coordinator.connect(client);
 	document.body.appendChild(client.node());
 });

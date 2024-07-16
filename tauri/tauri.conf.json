@@ -1,12 +1,12 @@
 {
   "productName": "quak",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "quak.dev",
   "build": {
     "frontendDist": "./dist",
-    "devUrl": "http://localhost:5173/src-tauri/app.html",
+    "devUrl": "http://localhost:5173/src-tauri/index.html",
     "beforeDevCommand": "npx vite",
-    "beforeBuildCommand": "deno task build"
+    "beforeBuildCommand": "npx vite build --config vite.config.mjs src-tauri"
   },
   "app": {
     "windows": [

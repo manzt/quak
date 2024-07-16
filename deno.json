@@ -6,14 +6,19 @@
 		"check": "deno check lib/widget.ts",
 		"tauri": "deno run -A npm:@tauri-apps/cli@2.0.0-beta.22"
 	},
+	"fmt": {
+		"useTabs": true,
+		"exclude": [".venv", "src", "examples", "README.md"]
+	},
+	"lint": {
+		"rules": {
+			"exclude": ["prefer-const"]
+		},
+		"exclude": [".venv", "src", "examples"]
+	},
 	"compilerOptions": {
 		"verbatimModuleSyntax": true,
-		"allowJs": false,
-		"lib": [
-			"esnext",
-			"dom",
-			"dom.iterable"
-		]
+		"lib": ["esnext", "dom", "dom.iterable"]
 	},
 	"imports": {
 		"@anywidget/types": "https://esm.sh/@anywidget/types@0.1.9",
@@ -30,21 +35,10 @@
 		"d3-axis": "https://esm.sh/d3-axis@3.0.0",
 		"d3-format": "https://esm.sh/d3-format@3.1.0",
 		"d3-time-format": "https://esm.sh/d3-time-format@4.1.0",
-
 		"@tauri-apps/api": "https://esm.sh/@tauri-apps/api@^2.0.0-beta.15",
 		"@tauri-apps/api/core": "https://esm.sh/@tauri-apps/api@^2.0.0-beta.15/core",
 		"@tauri-apps/plugin-dialog": "https://esm.sh/@tauri-apps/plugin-dialog@^2.0.0-beta.7",
 		"@tauri-apps/plugin-fs": "https://esm.sh/@tauri-apps/plugin-fs@^2.0.0-beta.7",
 		"@tauri-apps/plugin-shell": "https://esm.sh/@tauri-apps/plugin-shell@^2.0.0-beta.8"
-	},
-	"fmt": {
-		"useTabs": true,
-		"exclude": [".venv", "src", "examples", "README.md"]
-	},
-	"lint": {
-		"rules": {
-			"exclude": ["prefer-const"]
-		},
-		"exclude": [".venv", "src", "examples"]
 	}
 }
