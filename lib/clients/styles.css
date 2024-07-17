@@ -78,13 +78,13 @@ th {
   font-weight: bold;
   text-align: -internal-center;
   unicode-bidi: isolate;
-
   position: relative;
   background: var(--white);
   border-bottom: solid 1px var(--light-silver);
   border-left: solid 1px var(--light-silver);
   padding: 5px 6px;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .number, .date {
