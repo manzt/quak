@@ -10,7 +10,8 @@
 
 ## about
 
-**quak** is a scalable data profiler for quickly scanning large tables.
+**quak** is a scalable data profiler for quickly scanning large tables,
+capturing interactions as executable SQL queries.
 
 - **interactive** 🖱️ mouse over column summaries, cross-filter, sort, and slice rows.
 - **fast** ⚡ built with [Mosaic](https://github.com/uwdata/mosaic); views are expressed as SQL queries lazily executed by [DuckDB](https://duckdb.org/).
@@ -44,10 +45,10 @@ df = pd.read_csv("https://raw.githubusercontent.com/vega/vega-datasets/main/data
 df
 ```
 
-Any cell that returns an object implementing the
-[Python dataframe interchange protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html)
-(i.e., a dataframe-like "thing") will be rendered using `quak.Widget`, rather
-than the default renderer.
+**quak** hooks into Jupyter's display mechanism to automatically render any
+dataframe-like object (implementing the [Python dataframe interchange
+protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html))
+using `quak.Widget` instead of the default display.
 
 Alternatively, you can use `quak.Widget` directly:
 
@@ -56,8 +57,32 @@ import polars as pl
 import quak
 
 df = pl.read_csv("https://raw.githubusercontent.com/vega/vega-datasets/main/data/airports.csv")
-quak.Widget(df)
+widget = quak.Widget(df)
+widget
 ```
+
+### interacting with the data view
+
+**quak** is a UI for quickly scanning and exploring large tables. However, it is
+more than that. A side effect of quak's
+[Mosaic](https://github.com/uwdata/mosaic)-based architecture is that it
+captures all user interactions as _SQL queries_.
+
+At any point, table state can be accessed as a _SQL query_ in Python:
+
+```python
+widget.sql # SELECT * FROM df WHERE ...
+```
+
+which can then be executed to materialize the data in the kernel for further analysis:
+
+```python
+widget.data() # returns duckdb.DuckDBPyRelation object
+```
+
+By ensuring queries are translated to code, **quak** makes it easy to generate
+complex queries through user interactions that would be challenging to write
+manually, while keeping them reproducible.
 
 ## contributing
 
