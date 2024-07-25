@@ -32,7 +32,7 @@
 	},
 	"fmt": {
 		"useTabs": true,
-		"exclude": [".venv", "src", "examples", "README.md"]
+		"exclude": [".venv", "src", "examples", "README.md", "CONTRIBUTING.md"]
 	},
 	"lint": {
 		"rules": {
