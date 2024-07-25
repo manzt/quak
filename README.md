@@ -4,7 +4,7 @@
   <br>quak /kwæk/
 </h1>
   <p align="center">
-    <span>an <a href="https://github.com/manzt/anywidget">anywidget</a> for data that talks like a duck</span>
+    <span>an <a href="https://github.com/manzt/anywidget">anywidget</a> for data that talks like a duck 🦆</span>
   </p>
 </p>
 
