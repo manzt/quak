@@ -80,9 +80,9 @@ which for convenience can be executed in the kernel to materialize the view for 
 widget.data() # returns duckdb.DuckDBPyRelation object
 ```
 
-By ensuring UI state is translated to queries, **quak** makes it easy to generate
-complex queries through interactions that would be challenging to write
-manually, while keeping them reproducible.
+By representing UI state as SQL, **quak** makes it easy to generate complex
+queries via interactions that would be challenging to write manually, while
+keeping them reproducible.
 
 ## contributing
 
