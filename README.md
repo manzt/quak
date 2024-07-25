@@ -10,7 +10,7 @@
 
 ## about
 
-quak is a scalable data profiler for quickly scanning large tables.
+**quak** is a scalable data profiler for quickly scanning large tables.
 
 - **interactive** 🖱️ mouse over column summaries, cross-filter, sort, and slice rows.
 - **fast** ⚡ built with [Mosaic](https://github.com/uwdata/mosaic); views are expressed as SQL queries lazily executed by [DuckDB](https://duckdb.org/).
