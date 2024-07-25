@@ -59,49 +59,8 @@ df = pl.read_csv("https://raw.githubusercontent.com/vega/vega-datasets/main/data
 quak.Widget(df)
 ```
 
-## development
+## contributing
 
-**quak** requires both `rye` (for Python) and `deno` (for TypeScript).
-
-If you want to develop in the notebooks (`./examples/`), you will need to run
-both `deno` (to (re)build the TypeScript) and `rye` (to start the Jupyter
-notebook):
-
-```sh
-deno task dev
-```
-
-and then start the Python notebook server with `rye`:
-
-```sh
-rye sync
-rye run jupyter lab
-```
-
-Alternatively, you can just work on the TypeScript side of things by running:
-
-```sh
-npx vite
-# or deno run -A npm:vite
-```
-
-and editing `./lib/example.ts`.
-
-We check linting and formatting in CI:
-
-```sh
-# typescript
-deno lint
-deno fmt
-deno task check
-
-# python
-rye lint
-rye format
-```
-
-> [!NOTE]
-> Why the weird TypeScript stuff? In practice, hybrid Python/JS repos get messy
-> with npm and `node_modules`. With Deno there is no `node_modules`, and the
-> tool handles type-checking, linting, and formatting. The extra build scripts
-> serve to make nice development ergonamics within and outside of Jupyter.
+Contributors welcome! Check the [Contributors Guide](./CONTRIBUTING.md) to get
+started. Note: I'm wrapping up my PhD, so I might be slow to respond. Please
+open an issue before contributing a new feature.
