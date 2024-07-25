@@ -8,6 +8,22 @@
   </p>
 </p>
 
+# about
+
+quak is a scalable table viewer for quickly scanning LOTS of data.
+
+- **fast**: the implementaion is based on mosaic. All views (crossfiltering,
+  sorting) are expressed as SQL queries and pushed down to DuckDB for
+  execution. Data are only loaded when needed. 
+- **interactive**: mouse over the top-of-column summaries to explore the range
+  of values.
+- **flexible**: supports a wide range of data types and formats through the
+  [Python dataframe interchange
+  protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html).
+- **integrated**: Think of quak as a UI for building sophisticated SQL queries.
+  Selected views are expressed as SQL can be materialized back in kernel for
+  further analysis.
+
 > [!WARNING]
 > Here be dragons 🐉. `quak` is a prototype and not production-ready. Expect bugs.
 > The library is open-sourced for SciPy 2024.
