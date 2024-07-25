@@ -1,7 +1,12 @@
-# quak /kwæk/
-
-an [anywidget](https://github.com/manzt/anywidget) for data that talks like a
-duck
+<h1>
+<p align="center">
+  <img src="./logo.svg" alt="quak logo" width="60">
+  <br>quak /kwæk/
+</h1>
+  <p align="center">
+    <span>an <a href="https://github.com/manzt/anywidget">anywidget</a> for data that talks like a duck</span>
+  </p>
+</p>
 
 > [!WARNING]
 > Here be dragons 🐉. `quak` is a prototype and not production-ready. Expect bugs.
