@@ -8,8 +8,6 @@
   </p>
 </p>
 
-## about
-
 **quak** is a scalable data profiler for quickly scanning large tables,
 capturing interactions as executable SQL queries.
 
