@@ -8,11 +8,21 @@
   </p>
 </p>
 
-> [!WARNING]
-> Here be dragons 🐉. `quak` is a prototype and not production-ready. Expect bugs.
-> The library is open-sourced for SciPy 2024.
+## about
+
+**quak** is a scalable data profiler for quickly scanning large tables.
+
+- **interactive** 🖱️ mouse over column summaries, cross-filter, sort, and slice rows.
+- **fast** ⚡ built with [Mosaic](https://github.com/uwdata/mosaic); views are expressed as SQL queries lazily executed by [DuckDB](https://duckdb.org/).
+- **flexible** 🔄 supports many data types and formats via [Apache Arrow](https://arrow.apache.org/docs/index.html) and the [dataframe interchange protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html).
+- **reproducible** 📓 a UI for building complex SQL queries; materialize views in the kernel for further analysis.
 
 ## install
+
+> [!WARNING]
+> **quak** is a prototype exploring a high-performance data profiler based on
+> anywidget. It is not production-ready. Expect bugs. Open-sourced for SciPy
+> 2024.
 
 ```sh
 pip install quak
