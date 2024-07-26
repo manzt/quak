@@ -52,7 +52,8 @@ class Widget(anywidget.AnyWidget):
         self.on_msg(self._handle_custom_msg)
 
     def _handle_custom_msg(self, data: dict, buffers: list):
-        print(f"{data=}, {buffers=}")
+        logger.debug(f"{data=}, {buffers=}")
+
         start = time.time()
 
         uuid = data["uuid"]
