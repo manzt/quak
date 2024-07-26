@@ -166,9 +166,7 @@ export class DataTable extends MosaicClient {
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
-					.map((o) =>
-						o.order === "asc" ? asc(o.field) : desc(o.field)
-					),
+					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
 			);
 		this.#sql.value = query.clone().toString();
 		return query
@@ -412,9 +410,7 @@ function thcol(
 	});
 
 	signals.effect(() => {
-		sortButton.style.visibility = buttonVisible.value
-			? "visible"
-			: "hidden";
+		sortButton.style.visibility = buttonVisible.value ? "visible" : "hidden";
 	});
 
 	signals.effect(() => {
