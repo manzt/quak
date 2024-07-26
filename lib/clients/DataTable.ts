@@ -1,6 +1,7 @@
 import * as arrow from "apache-arrow";
 // @deno-types="../deps/mosaic-core.d.ts"
 import {
+	Coordinator,
 	type FieldInfo,
 	type FieldRequest,
 	MosaicClient,
@@ -29,6 +30,31 @@ interface DataTableOptions {
 
 // TODO: more
 type ColumnSummaryClient = Histogram | ValueCounts;
+
+export async function datatable(
+	table: string,
+	options: {
+		coordinator?: Coordinator;
+		height?: number;
+		columns?: Array<string>;
+	} = {},
+) {
+	assert(options.coordinator, "Must provide a coordinator");
+	let empty = await options.coordinator.query(
+		Query
+			.from(table)
+			.select(options.columns ?? ["*"])
+			.limit(0)
+			.toString(),
+	);
+	let client = new DataTable({
+		table,
+		schema: empty.schema,
+		height: options.height,
+	});
+	options.coordinator.connect(client);
+	return client;
+}
 
 export class DataTable extends MosaicClient {
 	/** source of the data */
@@ -120,6 +146,12 @@ export class DataTable extends MosaicClient {
 		return this.#root;
 	}
 
+	resize(height: number) {
+		this.#rows = Math.floor(height / this.#rowHeight);
+		this.#tableRoot.style.maxHeight = `${height}px`;
+		this.#tableRoot.scrollTop = 0;
+	}
+
 	get #columns() {
 		return this.#meta.schema.fields.map((field) => field.name);
 	}
@@ -134,7 +166,9 @@ export class DataTable extends MosaicClient {
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
-					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
+					.map((o) =>
+						o.order === "asc" ? asc(o.field) : desc(o.field)
+					),
 			);
 		this.#sql.value = query.clone().toString();
 		return query
@@ -378,7 +412,9 @@ function thcol(
 	});
 
 	signals.effect(() => {
-		sortButton.style.visibility = buttonVisible.value ? "visible" : "hidden";
+		sortButton.style.visibility = buttonVisible.value
+			? "visible"
+			: "hidden";
 	});
 
 	signals.effect(() => {
