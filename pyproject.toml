@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quak"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
     "anywidget",
     "pyarrow>=16.0.0",
