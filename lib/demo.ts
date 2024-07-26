@@ -69,7 +69,7 @@ async function main() {
 	} else {
 		let file = await getFile();
 		if (file.name.endsWith(".csv")) {
-			await db.registerFile(file.name, await file.text());
+			await db.registerFileText(file.name, await file.text());
 			exec = msql.loadCSV(tableName, file.name, { replace: true });
 		} else {
 			assert(file.name.endsWith(".parquet"));
