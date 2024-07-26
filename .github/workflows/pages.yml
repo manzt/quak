@@ -25,7 +25,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: latest
-          cache: 'npm'
       - run: npx vite build
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
