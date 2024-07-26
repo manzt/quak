@@ -56,7 +56,7 @@ Alternatively, you can use `quak.Widget` directly:
 import polars as pl
 import quak
 
-df = pl.read_csv("https://github.com/uwdata/mosaic/raw/main/data/athletes.parquet")
+df = pl.read_parquet("https://github.com/uwdata/mosaic/raw/main/data/athletes.parquet")
 widget = quak.Widget(df)
 widget
 ```
