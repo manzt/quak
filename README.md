@@ -1,6 +1,6 @@
 <h1>
 <p align="center">
-  <img src="./lib/logo-color.svg" alt="quak logo" width="80">
+  <img src="./assets/logo-color.svg" alt="quak logo" width="80">
   <br>quak /kwæk/
 </h1>
   <p align="center">
