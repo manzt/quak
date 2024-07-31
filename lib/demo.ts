@@ -8,6 +8,7 @@ import { datatable } from "./clients/DataTable.ts";
 let dropzone = document.querySelector("input")!;
 let options = document.querySelector("#options")!;
 let table = document.querySelector("#table")!;
+let exportButton = document.querySelector("#export")! as HTMLButtonElement;
 
 function getFile(): Promise<File> {
 	return new Promise((resolve) => {
@@ -61,7 +62,7 @@ async function main() {
 	let db = await connector.getDuckDB();
 	coordinator.databaseConnector(connector);
 
-	let exec;
+	let exec: string;
 	if (source) {
 		exec = source.endsWith(".csv")
 			? msql.loadCSV(tableName, source, { replace: true })
@@ -86,6 +87,26 @@ async function main() {
 	options.remove();
 	table.replaceChildren();
 	table.appendChild(dt.node());
+
+	function copyToClipboard() {
+		let from = exec.match(/ FROM .*$/)?.[0];
+		assert(from, "Could not find FROM clause in exec string.");
+		let sql = dt.sql?.replace(' FROM "df"', from);
+		navigator.clipboard.writeText(sql!);
+		const icons = exportButton.querySelectorAll("svg")!;
+		icons[0].classList.add("hidden");
+		icons[1].classList.remove("hidden");
+		setTimeout(() => {
+			icons[0].classList.remove("hidden");
+			icons[1].classList.add("hidden");
+		}, 1000);
+	}
+	exportButton.addEventListener("mousedown", copyToClipboard);
+	exportButton.addEventListener(
+		"keydown",
+		(e) => e?.key === "Enter" && copyToClipboard(),
+	);
+	exportButton.classList.remove("hidden");
 }
 
 main();
