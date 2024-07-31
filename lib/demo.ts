@@ -66,12 +66,17 @@ async function main() {
 	if (source) {
 		exec = source.endsWith(".csv")
 			? msql.loadCSV(tableName, source, { replace: true })
+			: source.endsWith(".json")
+			? msql.loadJSON(tableName, source, { replace: true })
 			: msql.loadParquet(tableName, source, { replace: true });
 	} else {
 		let file = await getFile();
 		if (file.name.endsWith(".csv")) {
 			await db.registerFileText(file.name, await file.text());
 			exec = msql.loadCSV(tableName, file.name, { replace: true });
+		} else if (file.name.endsWith(".json")) {
+			await db.registerFileText(file.name, await file.text());
+			exec = msql.loadJSON(tableName, file.name, { replace: true });
 		} else {
 			assert(file.name.endsWith(".parquet"));
 			await db.registerFileBuffer(
@@ -81,6 +86,9 @@ async function main() {
 			exec = msql.loadParquet(tableName, file.name, { replace: true });
 		}
 	}
+
+	// Bug in mosaic-sql
+	exec = exec.replace("json_format", "format");
 
 	await coordinator.exec([exec]);
 	let dt = await datatable(tableName, { coordinator, height: 500 });
