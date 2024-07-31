@@ -84,6 +84,21 @@ By representing UI state as SQL, **quak** makes it easy to generate complex
 queries via interactions that would be challenging to write manually, while
 keeping them reproducible.
 
+### using quak in marimo
+
+**quak** can also be used in [**marimo** notebooks](https://github.com/marimo-team/marimo),
+which provide out-of-the-box support for anywidget:
+
+```python
+import marimo as mo
+import polars as pl
+import quak
+
+df = pl.read_parquet("https://github.com/uwdata/mosaic/raw/main/data/athletes.parquet")
+widget = mo.ui.anywidget(quak.Widget(df))
+widget
+```
+
 ## contributing
 
 Contributors welcome! Check the [Contributors Guide](./CONTRIBUTING.md) to get
