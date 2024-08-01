@@ -42,6 +42,7 @@ export function CrossfilterHistogramPlot(
 	scale: (type: string) => Scale<number, number>;
 	update(bins: Array<Bin>, opts: { nullCount: number }): void;
 } {
+	let hoveredValue: number | undefined = 100;
 	let nullBinWidth = nullCount === 0 ? 0 : 5;
 	let spacing = nullBinWidth ? 4 : 0;
 	let extent = /** @type {const} */ ([
@@ -100,6 +101,28 @@ export function CrossfilterHistogramPlot(
 				.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
 				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
 		});
+
+	// Value under cursor label
+	if (hoveredValue) {
+		svg
+			.append("g")
+			.attr("transform", `translate(0,${height - marginBottom})`)
+			.call(
+				d3
+					.axisBottom(x)
+					// .tickValues(x.domain())
+					.tickValues([hoveredValue])
+					.tickFormat(tickFormatterForBins(type, bins))
+					.tickSize(2.5),
+			)
+			.call((g) => {
+				g.select(".domain").remove();
+				g.attr("class", "gray");
+				g.selectAll(".tick text")
+					.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
+					.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
+			});
+	}
 
 	/** @type {typeof foregroundBarGroup | undefined} */
 	let foregroundNullGroup: typeof foregroundBarGroup | undefined = undefined;
