@@ -120,16 +120,20 @@ export function CrossfilterHistogramPlot(
 			g.attr("class", "gray");
 			g.selectAll(".tick text")
 				.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
-				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
+				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em")
+				.attr("visibility", "hidden");
 		});
 
+	// `hovered` signal gets updated in mousemove event
 	effect(() => {
 		hoveredTick.selectAll(".tick")
-			.attr("transform", `translate(${x(hovered.value)},0)`);
+			.attr("transform", `translate(${x(hovered.value)},0)`)
+			.attr("visibility", hovered.value ? "visible" : "hidden");
 
 		hoveredTick
 			.selectAll(".tick text")
-			.text(`${hovered.value}`);
+			.text(`${hovered.value}`)
+			.attr("visibility", hovered.value ? "visible" : "hidden");
 	});
 
 	/** @type {typeof foregroundBarGroup | undefined} */
@@ -224,6 +228,9 @@ export function CrossfilterHistogramPlot(
 		const value = x.invert(relativeX);
 		const f = d3.format("~s");
 		hovered.value = f(value);
+	});
+	node.addEventListener("mouseleave", (event) => {
+		hovered.value = undefined;
 	});
 
 	render(bins, nullCount);
