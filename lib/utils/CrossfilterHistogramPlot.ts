@@ -84,6 +84,7 @@ export function CrossfilterHistogramPlot(
 		.append("g")
 		.attr("fill", fillColor);
 
+	// Min and max values labels
 	svg
 		.append("g")
 		.attr("transform", `translate(0,${height - marginBottom})`)
