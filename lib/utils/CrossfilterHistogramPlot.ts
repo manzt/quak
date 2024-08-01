@@ -229,7 +229,7 @@ export function CrossfilterHistogramPlot(
 		const f = d3.format("~s");
 		hovered.value = f(value);
 	});
-	node.addEventListener("mouseleave", (event) => {
+	node.addEventListener("mouseleave", (_) => {
 		hovered.value = undefined;
 	});
 
