@@ -212,6 +212,18 @@ export function CrossfilterHistogramPlot(
 	let node = svg.node();
 	assert(node, "Infallable");
 
+	node.addEventListener("mousemove", (event) => {
+		console.log("mouseover on Histogram!");
+		const relativeX = event.clientX - node.getBoundingClientRect().left;
+		const value = x.invert(relativeX);
+		// const f = d3.format(".1f"); // TODO: There needs to be a better way to decide format
+		const f = d3.format("~s");
+		hoveredValue = f(value);
+		console.log(value);
+		console.log("hoveredValue: " + hoveredValue);
+		// render(bins, nullCount);
+	});
+
 	render(bins, nullCount);
 	return Object.assign(node, {
 		/** @param {string} type */
