@@ -1,4 +1,5 @@
 import * as d3 from "../deps/d3.ts";
+import { effect, signal } from "@preact/signals-core";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
 import type { Bin, Scale } from "../types.ts";
@@ -42,7 +43,7 @@ export function CrossfilterHistogramPlot(
 	scale: (type: string) => Scale<number, number>;
 	update(bins: Array<Bin>, opts: { nullCount: number }): void;
 } {
-	let hoveredValue: number | undefined = 100;
+	let hovered = signal<number | undefined>(undefined);
 	let nullBinWidth = nullCount === 0 ? 0 : 5;
 	let spacing = nullBinWidth ? 4 : 0;
 	let extent = /** @type {const} */ ([
@@ -104,26 +105,32 @@ export function CrossfilterHistogramPlot(
 		});
 
 	// Value under cursor label
-	if (hoveredValue) {
-		svg
-			.append("g")
-			.attr("transform", `translate(0,${height - marginBottom})`)
-			.call(
-				d3
-					.axisBottom(x)
-					// .tickValues(x.domain())
-					.tickValues([hoveredValue])
-					.tickFormat(tickFormatterForBins(type, bins))
-					.tickSize(2.5),
-			)
-			.call((g) => {
-				g.select(".domain").remove();
-				g.attr("class", "gray");
-				g.selectAll(".tick text")
-					.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
-					.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
-			});
-	}
+	const hoveredTick = svg
+		.append("g")
+		.attr("transform", `translate(0,${height - marginBottom})`)
+		.call(
+			d3
+				.axisBottom(x)
+				.tickValues([0])
+				.tickFormat(tickFormatterForBins(type, bins))
+				.tickSize(2.5),
+		)
+		.call((g) => {
+			g.select(".domain").remove();
+			g.attr("class", "gray");
+			g.selectAll(".tick text")
+				.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
+				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
+		});
+
+	effect(() => {
+		hoveredTick.selectAll(".tick")
+			.attr("transform", `translate(${x(hovered.value)},0)`);
+
+		hoveredTick
+			.selectAll(".tick text")
+			.text(`${hovered.value}`);
+	});
 
 	/** @type {typeof foregroundBarGroup | undefined} */
 	let foregroundNullGroup: typeof foregroundBarGroup | undefined = undefined;
@@ -213,15 +220,10 @@ export function CrossfilterHistogramPlot(
 	assert(node, "Infallable");
 
 	node.addEventListener("mousemove", (event) => {
-		console.log("mouseover on Histogram!");
 		const relativeX = event.clientX - node.getBoundingClientRect().left;
 		const value = x.invert(relativeX);
-		// const f = d3.format(".1f"); // TODO: There needs to be a better way to decide format
 		const f = d3.format("~s");
-		hoveredValue = f(value);
-		console.log(value);
-		console.log("hoveredValue: " + hoveredValue);
-		// render(bins, nullCount);
+		hovered.value = f(value);
 	});
 
 	render(bins, nullCount);
