@@ -43,7 +43,7 @@ export function CrossfilterHistogramPlot(
 	scale: (type: string) => Scale<number, number>;
 	update(bins: Array<Bin>, opts: { nullCount: number }): void;
 } {
-	let hovered = signal<number | undefined>(undefined);
+	let hovered = signal<number | Date | undefined>(undefined);
 	let nullBinWidth = nullCount === 0 ? 0 : 5;
 	let spacing = nullBinWidth ? 4 : 0;
 	let extent = /** @type {const} */ ([
@@ -137,23 +137,26 @@ export function CrossfilterHistogramPlot(
 		// const fmt = d3.format("~s");
 		const fmt = tickFormatterForBins(type, bins);
 		hoveredTick.selectAll(".tick")
-			.attr("transform", `translate(${x(hovered.value)},0)`)
+			.attr("transform", `translate(${x(hovered.value || 0)},0)`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
 
 		hoveredTick
 			.selectAll(".tick text")
-			.text(`${fmt(hovered.value)}`)
+			.text(`${fmt(hovered.value || 0)}`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
 
-		const hoveredTickText = hoveredTick.select(".tick text");
-		const bbox = hoveredTickText.node().getBBox();
+		const hoveredTickText = hoveredTick.select(".tick text")
+			.node() as SVGGraphicsElement;
+		const bbox = hoveredTickText.getBBox();
 
 		svg
 			.selectAll(".hovered-bg")
 			.attr("visibility", hovered.value ? "visible" : "hidden")
 			.attr(
 				"transform",
-				`translate(${x(hovered.value) - 5},${height - marginBottom})`,
+				`translate(${x(hovered.value || 0) - 5},${
+					height - marginBottom
+				})`,
 			)
 			.attr("width", bbox.width + 5)
 			.attr("height", bbox.height + 5);
