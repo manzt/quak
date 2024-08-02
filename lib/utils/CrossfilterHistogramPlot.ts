@@ -251,7 +251,7 @@ export function CrossfilterHistogramPlot(
 		const relativeX = event.clientX - node.getBoundingClientRect().left;
 		hovered.value = x.invert(relativeX);
 	});
-	node.addEventListener("mouseleave", (_) => {
+	node.addEventListener("mouseleave", () => {
 		hovered.value = undefined;
 	});
 
