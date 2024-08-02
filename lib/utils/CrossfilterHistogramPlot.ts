@@ -104,6 +104,14 @@ export function CrossfilterHistogramPlot(
 				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
 		});
 
+	//~ Background rect for the next section (hover label)
+	svg.insert("rect")
+		.attr("transform", `translate(0,${height - marginBottom})`)
+		.attr("width", 20)
+		.attr("height", 20)
+		.style("fill", "white")
+		.attr("class", "hovered-bg");
+
 	// Value under cursor label
 	const hoveredTick = svg
 		.append("g")
@@ -134,6 +142,19 @@ export function CrossfilterHistogramPlot(
 			.selectAll(".tick text")
 			.text(`${hovered.value}`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
+
+		const hoveredTickText = hoveredTick.select(".tick text");
+		const bbox = hoveredTickText.node().getBBox();
+
+		svg
+			.selectAll(".hovered-bg")
+			.attr("visibility", hovered.value ? "visible" : "hidden")
+			.attr(
+				"transform",
+				`translate(${x(hovered.value) - 5},${height - marginBottom})`,
+			)
+			.attr("width", bbox.width + 5)
+			.attr("height", bbox.height + 5);
 	});
 
 	/** @type {typeof foregroundBarGroup | undefined} */
