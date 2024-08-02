@@ -63,12 +63,9 @@ widget
 
 ### interacting with the data
 
-**quak** is a UI for quickly scanning and exploring large tables. However, it is
-more than that. A side effect of quak's
-[Mosaic](https://github.com/uwdata/mosaic)-based architecture is that it
-captures all user interactions as _SQL queries_.
+**quak** captures all user interactions as _queries_.
 
-At any point, table state can be accessed as a _query_,
+At any point, table state can be accessed as SQL,
 
 ```python
 widget.sql # SELECT * FROM df WHERE ...
