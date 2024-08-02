@@ -134,13 +134,14 @@ export function CrossfilterHistogramPlot(
 
 	// `hovered` signal gets updated in mousemove event
 	effect(() => {
+		const fmt = d3.format("~s");
 		hoveredTick.selectAll(".tick")
 			.attr("transform", `translate(${x(hovered.value)},0)`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
 
 		hoveredTick
 			.selectAll(".tick text")
-			.text(`${hovered.value}`)
+			.text(`${fmt(hovered.value)}`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
 
 		const hoveredTickText = hoveredTick.select(".tick text");
@@ -247,8 +248,7 @@ export function CrossfilterHistogramPlot(
 	node.addEventListener("mousemove", (event) => {
 		const relativeX = event.clientX - node.getBoundingClientRect().left;
 		const value = x.invert(relativeX);
-		const f = d3.format("~s");
-		hovered.value = f(value);
+		hovered.value = value;
 	});
 	node.addEventListener("mouseleave", (_) => {
 		hovered.value = undefined;
