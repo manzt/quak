@@ -1,5 +1,5 @@
-import * as d3 from "../deps/d3.ts";
 import { effect, signal } from "@preact/signals-core";
+import * as d3 from "../deps/d3.ts";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
 import type { Bin, Scale } from "../types.ts";
