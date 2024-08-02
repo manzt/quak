@@ -154,9 +154,7 @@ export function CrossfilterHistogramPlot(
 			.attr("visibility", hovered.value ? "visible" : "hidden")
 			.attr(
 				"transform",
-				`translate(${x(hovered.value || 0) - 5},${
-					height - marginBottom
-				})`,
+				`translate(${x(hovered.value || 0) - 5},${height - marginBottom})`,
 			)
 			.attr("width", bbox.width + 5)
 			.attr("height", bbox.height + 5);
