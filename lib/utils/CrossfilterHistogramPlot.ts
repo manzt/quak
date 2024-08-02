@@ -134,7 +134,8 @@ export function CrossfilterHistogramPlot(
 
 	// `hovered` signal gets updated in mousemove event
 	effect(() => {
-		const fmt = d3.format("~s");
+		// const fmt = d3.format("~s");
+		const fmt = tickFormatterForBins(type, bins);
 		hoveredTick.selectAll(".tick")
 			.attr("transform", `translate(${x(hovered.value)},0)`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
