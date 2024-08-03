@@ -9,6 +9,16 @@ if typing.TYPE_CHECKING:
     import pyarrow as pa
 
 
+def has_pycapsule_stream_interface(obj: object) -> bool:
+    """
+    Check if an object implements the Arrow C Stream Arrow via the PyCapsule Interface.
+
+    https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html
+       has an Arrow C Stream
+    """
+    return hasattr(obj, "__arrow_c_stream__")
+
+
 def is_dataframe_api_obj(obj: object) -> DataFrameObject:
     """Check if an object has a dataframe API."""
     method = getattr(obj, "__dataframe__", None)

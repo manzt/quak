@@ -6,12 +6,14 @@ import time
 
 import anywidget
 import duckdb
+import pyarrow as pa
 import traitlets
 
 from ._util import (
     arrow_table_from_dataframe_protocol,
     arrow_table_from_ipc,
     get_columns,
+    has_pycapsule_stream_interface,
     is_arrow_ipc,
     table_to_ipc,
 )
@@ -37,7 +39,10 @@ class Widget(anywidget.AnyWidget):
             conn = data
         else:
             conn = duckdb.connect(":memory:")
-            if is_arrow_ipc(data):
+            if has_pycapsule_stream_interface(data):
+                # arrow_table = pa.RecordBatchReader.from_stream(data)
+                arrow_table = pa.table(data)
+            elif is_arrow_ipc(data):
                 arrow_table = arrow_table_from_ipc(data)
             else:
                 arrow_table = arrow_table_from_dataframe_protocol(data)
