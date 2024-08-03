@@ -105,12 +105,11 @@ export function CrossfilterHistogramPlot(
 		});
 
 	//~ Background rect for the next section (hover label)
-	svg.insert("rect")
+	const hoverLabelBackground = svg.insert("rect")
 		.attr("transform", `translate(0,${height - marginBottom})`)
 		.attr("width", 20)
 		.attr("height", 20)
-		.style("fill", "white")
-		.attr("class", "hovered-bg");
+		.style("fill", "white");
 
 	// Value under cursor label
 	const hoveredTick = svg
@@ -149,8 +148,7 @@ export function CrossfilterHistogramPlot(
 			.node() as SVGGraphicsElement;
 		const bbox = hoveredTickText.getBBox();
 
-		svg
-			.selectAll(".hovered-bg")
+		hoverLabelBackground
 			.attr("visibility", hovered.value ? "visible" : "hidden")
 			.attr(
 				"transform",
