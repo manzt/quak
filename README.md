@@ -98,59 +98,18 @@ widget
 
 ### Using Quak with Panel
 
-**Quak** can also be integrated with [**Panel**](https://panel.holoviz.org/reference/index.html) to create dynamic reports, tools for notebooks, and live data apps. It's a powerful combination for data visualization and interactivity!
-
-First, install the necessary packages:
-
-```bash
-pip install quak polars panel ipywidgets_bokeh
-```
-
-Now, let's get quacking as usual:
-
-```python
-import polars as pl
-import quak
-
-QUAK_LOGO = "https://github.com/manzt/quak/raw/main/assets/logo-color.svg"
-
-df = pl.read_parquet("https://github.com/uwdata/mosaic/raw/main/data/athletes.parquet")
-quack_widget = quak.Widget(df)
-```
-
-Next, integrate Quak with Panel:
+**Quak** can be also be used in [**Panel**](https://panel.holoviz.org) tools and data apps. To  enable usage you must install [ipywidgets_bokeh](https://pypi.org/project/ipywidgets-bokeh/) and add `"ipywidget"` to `pn.extension` as described in the [Panel IPyWidget](https://panel.holoviz.org/reference/panes/IPyWidget.html) reference guide.
 
 ```python
 import panel as pn
+import polars as pl
+import quak
 
-# Add support for anywidget/ ipywidgets
 pn.extension("ipywidgets")
-
-# Adjust widget layout
-quack_widget.layout.width = quack_widget.layout.height = "100%"
-
-# Create a Panel component
-quack_component = pn.pane.IPyWidget(quack_widget, sizing_mode="stretch_both")
-
-# Create and serve the app
-pn.template.FastListTemplate(
-    logo=QUAK_LOGO,
-    site="Quak",
-    title="Works with Panel",
-    main=[quack_component],
-    accent="#FFA700",
-).servable()
+df = pl.read_parquet("https://github.com/uwdata/mosaic/raw/main/data/athletes.parquet")
+widget = pn.panel(quak.Widget(df))
+widget
 ```
-
-To launch your app, use the following command in a terminal:
-
-```bash
-panel serve app.py
-```
-
-Your app should now look like this:
-
-![Quak Panel Data App](assets/quak-panel-data-app.png)
 
 ## contributing
 
