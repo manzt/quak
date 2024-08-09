@@ -78,7 +78,7 @@ export class DataTable extends MosaicClient {
 	/** number of rows to fetch */
 	#limit: number = 100;
 	/** whether an internal request is pending */
-	#pendingInternalRequest: boolean = false;
+	#pendingInternalRequest: boolean = true;
 	/** number of rows to display */
 	#rows: number = 11.5;
 	/** height of a row */
@@ -98,7 +98,6 @@ export class DataTable extends MosaicClient {
 	constructor(source: DataTableOptions) {
 		super(Selection.crossfilter());
 		this.#format = formatof(source.schema);
-		this.#pendingInternalRequest = false;
 		this.#meta = source;
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
