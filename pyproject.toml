@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quak"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
     "anywidget",
     "pyarrow>=16.0.0",
@@ -14,7 +14,7 @@ readme = "README.md"
 
 [tool.hatch.build]
 only-packages = true
-artifacts = ["src/quak/widget.js"]
+artifacts = ["src/quak/widget.js", "scripts/hatch_build.py"]
 
 [tool.hatch.envs.default]
 installer = "uv"

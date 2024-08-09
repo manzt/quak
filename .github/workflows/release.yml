@@ -1,14 +1,16 @@
+name: Release
+
 on:
   push:
     tags:
       - "v*"
 
-permissions:
-  contents: write
-
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,9 +21,12 @@ jobs:
       - uses: eifinger/setup-rye@v3
         with:
           version: latest
-      - run: |
-          rye build
-          rye publish
+
+      - run: rye build
+
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
       - run: deno run -A 'npm:changelogithub@0.13'
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
