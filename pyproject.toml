@@ -46,3 +46,6 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["D", "S"]
+
+[tool.hatch.build.hooks.custom]
+path = "scripts/hatch_build.py"
