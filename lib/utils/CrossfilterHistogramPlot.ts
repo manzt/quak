@@ -101,7 +101,7 @@ export function CrossfilterHistogramPlot(
 			g.attr("class", "gray");
 			g.selectAll(".tick text")
 				.attr("text-anchor", (_, i) => ["start", "end", "start"][i])
-				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
+				.attr("dx", (_, i) => ["-0.25em", "0.25em", "-0.25em"][i]);
 		});
 
 	const hoveredTickGroup = axes.node()?.querySelectorAll(".tick")[2];
@@ -118,27 +118,30 @@ export function CrossfilterHistogramPlot(
 	const fmt = type === "number"
 		? d3.format(".3s")
 		: tickFormatterForBins(type, bins);
-	// `hovered` signal gets updated in mousemove event
+
+	let [xmin, xmax] = x.domain();
 	effect(() => {
 		hoveredTick
-			.attr("transform", `translate(${x(hovered.value || 0)},0)`)
+			.attr("transform", `translate(${x(hovered.value ?? xmin)},0)`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
 
 		hoveredTick
 			.selectAll("text")
-			.text(`${fmt(hovered.value || 0)}`)
+			.text(`${fmt(hovered.value ?? xmin)}`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
 
-		const hoveredTickText = hoveredTick.select("text")
-			.node() as SVGGraphicsElement;
+		const hoveredTickText = hoveredTick
+			.select("text")
+			.node() as SVGTextElement;
 		const bbox = hoveredTickText.getBBox();
+		const cond = (x(hovered.value ?? xmin) + bbox.width) > x(xmax);
+
+		hoveredTickText.setAttribute("text-anchor", cond ? "end" : "start");
+		hoveredTickText.setAttribute("dx", cond ? "-0.25em" : "0.25em");
 
 		hoverLabelBackground
 			.attr("visibility", hovered.value ? "visible" : "hidden")
-			.attr(
-				"transform",
-				`translate(-2.5,0)`,
-			)
+			.attr("transform", `translate(${(cond ? -bbox.width : 0) - 2.5}, 2.5)`)
 			.attr("width", bbox.width + 5)
 			.attr("height", bbox.height + 5);
 	});
@@ -232,7 +235,7 @@ export function CrossfilterHistogramPlot(
 
 	node.addEventListener("mousemove", (event) => {
 		const relativeX = event.clientX - node.getBoundingClientRect().left;
-		hovered.value = x.invert(relativeX);
+		hovered.value = clamp(x.invert(relativeX), xmin, xmax);
 	});
 	node.addEventListener("mouseleave", () => {
 		hovered.value = undefined;
@@ -258,4 +261,13 @@ export function CrossfilterHistogramPlot(
 			render(bins, nullCount);
 		},
 	});
+}
+
+function clamp(
+	value: number | Date,
+	min: number | Date,
+	max: number | Date,
+): number {
+	// @ts-expect-error - value is either number or Date
+	return Math.max(min, Math.min(max, value));
 }
