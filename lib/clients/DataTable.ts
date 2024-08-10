@@ -118,6 +118,8 @@ export class DataTable extends MosaicClient {
 		this.#shadowRoot.appendChild(root);
 		this.#tableRoot = root;
 
+		addDirectionalScrollWithPreventDefault(this.#tableRoot);
+
 		// scroll event listener
 		this.#tableRoot.addEventListener("scroll", async () => {
 			let isAtBottom =
@@ -555,4 +557,45 @@ function asc(field: string): SQLExpression {
 	// @ts-expect-error - private field
 	expr._expr[0] = expr._expr[0].replace("DESC", "ASC");
 	return expr;
+}
+
+/**
+ * Adds custom wheel behavior to an HTML element, allowing either horizontal or vertical scrolling based on the scroll input.
+ * Prevents default scrolling to stop event propagation to parent elements.
+ *
+ * @param {HTMLElement} root - The element to apply the scroll behavior to.
+ * @param {number} [scrollThreshold=10] - The minimum delta required to trigger horizontal or vertical scrolling.
+ */
+function addDirectionalScrollWithPreventDefault(
+	root: HTMLElement,
+	scrollThreshold: number = 10,
+) {
+	let accumulatedDeltaX = 0;
+	let accumulatedDeltaY = 0;
+
+	root.addEventListener(
+		"wheel",
+		(event) => {
+			event.preventDefault();
+			accumulatedDeltaX += event.deltaX;
+			accumulatedDeltaY += event.deltaY;
+
+			if (Math.abs(accumulatedDeltaX) > Math.abs(accumulatedDeltaY)) {
+				// horizontal scrolling
+				if (Math.abs(accumulatedDeltaX) > scrollThreshold) {
+					root.scrollLeft += accumulatedDeltaX;
+					accumulatedDeltaX = 0;
+					accumulatedDeltaY = 0; // Reset Y to avoid unintentional vertical scrolling
+				}
+			} else {
+				// vertical scrolling
+				if (Math.abs(accumulatedDeltaY) > scrollThreshold) {
+					root.scrollTop += accumulatedDeltaY;
+					accumulatedDeltaX = 0; // Reset X to avoid unintentional horizontal scrolling
+					accumulatedDeltaY = 0;
+				}
+			}
+		},
+		{ passive: false },
+	);
 }
