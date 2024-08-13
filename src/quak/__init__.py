@@ -1,5 +1,6 @@
 """An anywidget for data that talks like a duck."""
 
+from ._util import has_pycapsule_stream_interface
 from ._version import __version__
 from ._widget import Widget
 
@@ -18,7 +19,11 @@ def load_ipython_extension(ipython) -> None:  # type: ignore[no-untyped-def]
             # special case for duckdb relations
             if isinstance(obj, duckdb.DuckDBPyRelation):
                 obj = obj.arrow()
-            if is_arrow_ipc(obj) or is_dataframe_api_obj(obj):
+            if (
+                has_pycapsule_stream_interface(obj)
+                or is_arrow_ipc(obj)
+                or is_dataframe_api_obj(obj)
+            ):
                 obj = Widget(obj)
             return super().format(obj, include, exclude)
 

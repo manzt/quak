@@ -6,13 +6,16 @@ import time
 
 import anywidget
 import duckdb
+import pyarrow as pa
 import traitlets
 
 from ._util import (
     arrow_table_from_dataframe_protocol,
     arrow_table_from_ipc,
     get_columns,
+    has_pycapsule_stream_interface,
     is_arrow_ipc,
+    is_dataframe_api_obj,
     table_to_ipc,
 )
 
@@ -37,10 +40,22 @@ class Widget(anywidget.AnyWidget):
             conn = data
         else:
             conn = duckdb.connect(":memory:")
-            if is_arrow_ipc(data):
+            if has_pycapsule_stream_interface(data):
+                # NOTE: for now we materialize the input into an in-memory Arrow table,
+                # so that we can perform repeated queries on that. In the future, it may
+                # be better to keep this Arrow stream non-materalized in Python and
+                # create a new DuckDB table from the stream.
+                # arrow_table = pa.RecordBatchReader.from_stream(data)
+                arrow_table = pa.table(data)
+            elif is_arrow_ipc(data):
                 arrow_table = arrow_table_from_ipc(data)
-            else:
+            elif is_dataframe_api_obj(data):
                 arrow_table = arrow_table_from_dataframe_protocol(data)
+            else:
+                raise ValueError(
+                    "input must be a DuckDB connection, DataFrame-like, an Arrow IPC "
+                    "table, or an Arrow object exporting the Arrow C Stream interface."
+                )
             conn.register(table, arrow_table)
         self._conn = conn
         super().__init__(
