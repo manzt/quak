@@ -292,10 +292,7 @@ export class DataTable extends MosaicClient {
 			this.#select = Object.fromEntries(
 				cols.map((col, i) => [col.nameState.value, this.#columns[i]]),
 			);
-			// TODO: set outside of effect ...
-			setTimeout(() => {
-				this.#sql.value = this.#sql.value?.clone().select(this.#select);
-			}, 0);
+			this.requestData();
 		});
 
 		// @deno-fmt-ignore
@@ -407,9 +404,9 @@ function thcol(
 	let input = html`<input
 		type="text"
 		maxlength="256"
-		placeholder=${name}
+		placeholder=${name.value}
 		spellcheck="false"
-		value=${name}
+		value=${name.value}
 		onkeydown=${(event: KeyboardEvent) => {
 			if (event.key === "Enter") {
 				event.preventDefault();
@@ -424,6 +421,10 @@ function thcol(
 		}}
 		onblur=${() => {
 			resetButton.style.display = "none";
+			// if empty restore the original name
+			if (input.value === "") {
+				input.value = field.name;
+			}
 		}}
 	>`;
 
