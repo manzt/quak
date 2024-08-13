@@ -1,3 +1,4 @@
+import { effect, signal } from "@preact/signals-core";
 import * as d3 from "../deps/d3.ts";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
@@ -42,6 +43,7 @@ export function CrossfilterHistogramPlot(
 	scale: (type: string) => Scale<number, number>;
 	update(bins: Array<Bin>, opts: { nullCount: number }): void;
 } {
+	let hovered = signal<number | Date | undefined>(undefined);
 	let nullBinWidth = nullCount === 0 ? 0 : 5;
 	let spacing = nullBinWidth ? 4 : 0;
 	let extent = /** @type {const} */ ([
@@ -83,13 +85,14 @@ export function CrossfilterHistogramPlot(
 		.append("g")
 		.attr("fill", fillColor);
 
-	svg
+	// Min and max values labels
+	const axes = svg
 		.append("g")
 		.attr("transform", `translate(0,${height - marginBottom})`)
 		.call(
 			d3
 				.axisBottom(x)
-				.tickValues(x.domain())
+				.tickValues([...x.domain(), 0]) // min/max ticks and hovered
 				.tickFormat(tickFormatterForBins(type, bins))
 				.tickSize(2.5),
 		)
@@ -97,9 +100,51 @@ export function CrossfilterHistogramPlot(
 			g.select(".domain").remove();
 			g.attr("class", "gray");
 			g.selectAll(".tick text")
-				.attr("text-anchor", (_, i) => i === 0 ? "start" : "end")
-				.attr("dx", (_, i) => i === 0 ? "-0.25em" : "0.25em");
+				.attr("text-anchor", (_, i) => ["start", "end", "start"][i])
+				.attr("dx", (_, i) => ["-0.25em", "0.25em", "-0.25em"][i]);
 		});
+
+	const hoveredTickGroup = axes.node()?.querySelectorAll(".tick")[2];
+	assert(hoveredTickGroup, "invariant");
+	const hoveredTick = d3.select(hoveredTickGroup);
+
+	//~ Background rect for the next section (hover label)
+	const hoverLabelBackground = hoveredTick
+		.insert("rect", ":first-child")
+		.attr("width", 20)
+		.attr("height", 20)
+		.style("fill", "white");
+
+	const fmt = type === "number"
+		? d3.format(".3s")
+		: tickFormatterForBins(type, bins);
+
+	let [xmin, xmax] = x.domain();
+	effect(() => {
+		hoveredTick
+			.attr("transform", `translate(${x(hovered.value ?? xmin)},0)`)
+			.attr("visibility", hovered.value ? "visible" : "hidden");
+
+		hoveredTick
+			.selectAll("text")
+			.text(`${fmt(hovered.value ?? xmin)}`)
+			.attr("visibility", hovered.value ? "visible" : "hidden");
+
+		const hoveredTickText = hoveredTick
+			.select("text")
+			.node() as SVGTextElement;
+		const bbox = hoveredTickText.getBBox();
+		const cond = (x(hovered.value ?? xmin) + bbox.width) > x(xmax);
+
+		hoveredTickText.setAttribute("text-anchor", cond ? "end" : "start");
+		hoveredTickText.setAttribute("dx", cond ? "-0.25em" : "0.25em");
+
+		hoverLabelBackground
+			.attr("visibility", hovered.value ? "visible" : "hidden")
+			.attr("transform", `translate(${(cond ? -bbox.width : 0) - 2.5}, 2.5)`)
+			.attr("width", bbox.width + 5)
+			.attr("height", bbox.height + 5);
+	});
 
 	/** @type {typeof foregroundBarGroup | undefined} */
 	let foregroundNullGroup: typeof foregroundBarGroup | undefined = undefined;
@@ -188,6 +233,14 @@ export function CrossfilterHistogramPlot(
 	let node = svg.node();
 	assert(node, "Infallable");
 
+	node.addEventListener("mousemove", (event) => {
+		const relativeX = event.clientX - node.getBoundingClientRect().left;
+		hovered.value = clamp(x.invert(relativeX), xmin, xmax);
+	});
+	node.addEventListener("mouseleave", () => {
+		hovered.value = undefined;
+	});
+
 	render(bins, nullCount);
 	return Object.assign(node, {
 		/** @param {string} type */
@@ -208,4 +261,13 @@ export function CrossfilterHistogramPlot(
 			render(bins, nullCount);
 		},
 	});
+}
+
+function clamp(
+	value: number | Date,
+	min: number | Date,
+	max: number | Date,
+): number {
+	// @ts-expect-error - value is either number or Date
+	return Math.max(min, Math.min(max, value));
 }

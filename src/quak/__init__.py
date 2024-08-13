@@ -7,7 +7,7 @@ from ._widget import Widget
 __all__ = ["Widget", "__version__"]
 
 
-def load_ipython_extension(ipython):  # type: ignore[no-untyped-def]
+def load_ipython_extension(ipython) -> None:  # type: ignore[no-untyped-def]
     """Extend IPython with the interactive quak display for dataframes."""
     import duckdb
     from IPython.core.formatters import DisplayFormatter
@@ -28,3 +28,10 @@ def load_ipython_extension(ipython):  # type: ignore[no-untyped-def]
             return super().format(obj, include, exclude)
 
     ipython.display_formatter = QuakDisplayFormatter()
+
+
+def unload_ipython_extension(ipython) -> None:  # type: ignore[no-untyped-def]
+    """Unload the quak extension from IPython."""
+    from IPython.core.formatters import DisplayFormatter
+
+    ipython.display_formatter = DisplayFormatter()

@@ -63,12 +63,9 @@ widget
 
 ### interacting with the data
 
-**quak** is a UI for quickly scanning and exploring large tables. However, it is
-more than that. A side effect of quak's
-[Mosaic](https://github.com/uwdata/mosaic)-based architecture is that it
-captures all user interactions as _SQL queries_.
+**quak** captures all user interactions as _queries_.
 
-At any point, table state can be accessed as a _query_,
+At any point, table state can be accessed as SQL,
 
 ```python
 widget.sql # SELECT * FROM df WHERE ...
@@ -83,6 +80,21 @@ widget.data() # returns duckdb.DuckDBPyRelation object
 By representing UI state as SQL, **quak** makes it easy to generate complex
 queries via interactions that would be challenging to write manually, while
 keeping them reproducible.
+
+### using quak in marimo
+
+**quak** can also be used in [**marimo** notebooks](https://github.com/marimo-team/marimo),
+which provide out-of-the-box support for anywidget:
+
+```python
+import marimo as mo
+import polars as pl
+import quak
+
+df = pl.read_parquet("https://github.com/uwdata/mosaic/raw/main/data/athletes.parquet")
+widget = mo.ui.anywidget(quak.Widget(df))
+widget
+```
 
 ## contributing
 

@@ -1,9 +1,104 @@
 <!doctype html>
 <html lang="en">
 	<head>
-		<meta charset="utf-8">
-		<title>quak 🦆</title>
+		<meta charset="UTF-8" />
+		<link rel="icon" type="image/svg+xml" href="./assets/logo-color.svg" />
+		<title>quak | app</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="description" content="juypyter widgets made easy">
+		<!-- Open Graph Meta Tags -->
+		<meta property="og:url" content="https://github.com/manzt/quak">
+		<meta property="og:type" content="website">
+		<meta property="og:title" content="quak | app">
+		<meta property="og:description" content="a scalable data profiler for quickly scanning large tables">
+		<meta property="og:image" content="https://raw.githubusercontent.com/manzt/quak/main/assets/og.png">
+		<!-- Twitter Meta Tags -->
+		<meta name="twitter:card" content="summary_large_image">
+		<meta property="twitter:domain" content="https://github.com">
+		<meta property="twitter:url" content="https://github.com/manzt/quak">
+		<meta name="twitter:title" content="quak | app">
+		<meta property="twitter:description" content="a scalable data profiler for quickly scanning large tables">
+		<meta property="twitter:image" content="https://raw.githubusercontent.com/manzt/quak/main/assets/og.png">
+		<script src="https://cdn.tailwindcss.com/3.4.5"></script>
+		<script type="module" src="./lib/demo.ts"></script>
 	</head>
-	<script type="module" src="./lib/example.ts"></script>
-	<body></body>
+	<body>
+		<div id="banner" class="hidden bg-amber-600">
+			<div class="mx-auto py-1 px-4">
+				<div class="flex items-center justify-between flex-wrap">
+					<div class="w-0 flex-1 flex items-center truncate">
+						<p class="ml-3 text-white">
+							<b>quak</b> a scalable data profiler for quickly scanning large tables&ensp;
+							<a class="underline font-medium" href="https://github.com/manzt/quak">Learn more →</a>
+						</p>
+					</div>
+					<div class="order-2 flex-shrink-0 sm:order-3 sm:ml-3">
+						<button
+							type="button"
+							id="dismiss"
+							class="-mr-1 flex p-1 rounded-md hover:bg-amber-500 focus:outline-none sm:-mr-2"
+						>
+							<span class="sr-only">Dismiss</span>
+							<svg
+								class="h-4 w-4 text-white"
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								aria-hidden="true"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M6 18L18 6M6 6l12 12"
+								/>
+							</svg>
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div id="options" class="hidden relative max-w-2xl mx-auto m-8 flex flex-col opacity-60">
+
+			<label
+				id="dropzone"
+				class="rounded-lg h-48 border-2 border-gray-200 border-dashed text-gray-600 flex flex-col justify-center items-center"
+			>
+				<input type="file" class="absolute w-full h-full opacity-0" accept=".csv,.parquet"/>
+				<img src="./assets/logo-color.svg" class="h-20 w-20" />
+				<div id="message" class="text-center">
+					Drag & Drop a <strong>.csv</strong> or <strong>.parquet</strong>
+				</div>
+			</label>
+
+			<a class="mt-2 hover:underline hover:opacity-100 self-end opacity-70" href="?source=https://raw.githubusercontent.com/uwdata/mosaic/main/data/athletes.csv">example →</a>
+
+		</div>
+
+		<div class="m-5 relative">
+			<div id="table"></div>
+			<button
+				id="export"
+				tabindex="0"
+				class="hidden absolute bottom-0 left-[7px] flex items-center group p-0.5 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-300"
+				title="Copy SQL to clipboard"
+			>
+				<svg class="w-5 h-4 stroke-gray-400 group-focus:stroke-gray-900 group-hover:stroke-gray-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+						<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+						<path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+						<path d="M16 4h2a2 2 0 0 1 2 2v4"/>
+						<path d="M21 14H11"/>
+						<path d="m15 10-4 4 4 4"/>
+				</svg>
+
+				<svg class="hidden w-5 h-4 stroke-gray-600 group-focus:stroke-gray-900 group-hover:stroke-gray-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M20 6 9 17l-5-5"/>
+				</svg>
+
+			</button>
+		</div>
+
+	</body>
 </html>

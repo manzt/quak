@@ -32,12 +32,19 @@
 	},
 	"fmt": {
 		"useTabs": true,
-		"exclude": [".venv", "src", "examples", "README.md", "CONTRIBUTING.md"]
+		"exclude": [
+			".venv",
+			"src",
+			"examples",
+			"README.md",
+			"CONTRIBUTING.md",
+			"dist"
+		]
 	},
 	"lint": {
 		"rules": {
 			"exclude": ["prefer-const"]
 		},
-		"exclude": [".venv", "src", "examples"]
+		"exclude": [".venv", "src", "examples", "dist"]
 	}
 }

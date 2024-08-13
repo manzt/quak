@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - uses: eifinger/setup-rye@v3
+        with:
+          version: latest
+
+      - run: rye build
+
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - run: deno run -A 'npm:changelogithub@0.13'
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}

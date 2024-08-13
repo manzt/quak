@@ -1,6 +1,7 @@
 import * as arrow from "apache-arrow";
 // @deno-types="../deps/mosaic-core.d.ts"
 import {
+	Coordinator,
 	type FieldInfo,
 	type FieldRequest,
 	MosaicClient,
@@ -30,6 +31,31 @@ interface DataTableOptions {
 // TODO: more
 type ColumnSummaryClient = Histogram | ValueCounts;
 
+export async function datatable(
+	table: string,
+	options: {
+		coordinator?: Coordinator;
+		height?: number;
+		columns?: Array<string>;
+	} = {},
+) {
+	assert(options.coordinator, "Must provide a coordinator");
+	let empty = await options.coordinator.query(
+		Query
+			.from(table)
+			.select(options.columns ?? ["*"])
+			.limit(0)
+			.toString(),
+	);
+	let client = new DataTable({
+		table,
+		schema: empty.schema,
+		height: options.height,
+	});
+	options.coordinator.connect(client);
+	return client;
+}
+
 export class DataTable extends MosaicClient {
 	/** source of the data */
 	#meta: { table: string; schema: arrow.Schema };
@@ -52,7 +78,7 @@ export class DataTable extends MosaicClient {
 	/** number of rows to fetch */
 	#limit: number = 100;
 	/** whether an internal request is pending */
-	#pendingInternalRequest: boolean = false;
+	#pendingInternalRequest: boolean = true;
 	/** number of rows to display */
 	#rows: number = 11.5;
 	/** height of a row */
@@ -72,7 +98,6 @@ export class DataTable extends MosaicClient {
 	constructor(source: DataTableOptions) {
 		super(Selection.crossfilter());
 		this.#format = formatof(source.schema);
-		this.#pendingInternalRequest = false;
 		this.#meta = source;
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
@@ -92,6 +117,8 @@ export class DataTable extends MosaicClient {
 		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
 		this.#shadowRoot.appendChild(root);
 		this.#tableRoot = root;
+
+		addDirectionalScrollWithPreventDefault(this.#tableRoot);
 
 		// scroll event listener
 		this.#tableRoot.addEventListener("scroll", async () => {
@@ -118,6 +145,12 @@ export class DataTable extends MosaicClient {
 
 	node() {
 		return this.#root;
+	}
+
+	resize(height: number) {
+		this.#rows = Math.floor(height / this.#rowHeight);
+		this.#tableRoot.style.maxHeight = `${height}px`;
+		this.#tableRoot.scrollTop = 0;
 	}
 
 	get #columns() {
@@ -524,4 +557,45 @@ function asc(field: string): SQLExpression {
 	// @ts-expect-error - private field
 	expr._expr[0] = expr._expr[0].replace("DESC", "ASC");
 	return expr;
+}
+
+/**
+ * Adds custom wheel behavior to an HTML element, allowing either horizontal or vertical scrolling based on the scroll input.
+ * Prevents default scrolling to stop event propagation to parent elements.
+ *
+ * @param {HTMLElement} root - The element to apply the scroll behavior to.
+ * @param {number} [scrollThreshold=10] - The minimum delta required to trigger horizontal or vertical scrolling.
+ */
+function addDirectionalScrollWithPreventDefault(
+	root: HTMLElement,
+	scrollThreshold: number = 10,
+) {
+	let accumulatedDeltaX = 0;
+	let accumulatedDeltaY = 0;
+
+	root.addEventListener(
+		"wheel",
+		(event) => {
+			event.preventDefault();
+			accumulatedDeltaX += event.deltaX;
+			accumulatedDeltaY += event.deltaY;
+
+			if (Math.abs(accumulatedDeltaX) > Math.abs(accumulatedDeltaY)) {
+				// horizontal scrolling
+				if (Math.abs(accumulatedDeltaX) > scrollThreshold) {
+					root.scrollLeft += accumulatedDeltaX;
+					accumulatedDeltaX = 0;
+					accumulatedDeltaY = 0; // Reset Y to avoid unintentional vertical scrolling
+				}
+			} else {
+				// vertical scrolling
+				if (Math.abs(accumulatedDeltaY) > scrollThreshold) {
+					root.scrollTop += accumulatedDeltaY;
+					accumulatedDeltaX = 0; // Reset X to avoid unintentional horizontal scrolling
+					accumulatedDeltaY = 0;
+				}
+			}
+		},
+		{ passive: false },
+	);
 }
