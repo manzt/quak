@@ -69,6 +69,8 @@ export class DataTable extends MosaicClient {
 	#tbody: HTMLTableSectionElement = document.createElement("tbody");
 	/** The SQL order by */
 	#orderby: Array<{ field: string; order: "asc" | "desc" | "unset" }> = [];
+	/** The SQL select */
+	#select: Record<string, string>;
 	/** template row for data */
 	#templateRow: HTMLTableRowElement | undefined = undefined;
 	/** div containing the table */
@@ -93,12 +95,15 @@ export class DataTable extends MosaicClient {
 	/** @type {AsyncBatchReader<arrow.StructRowProxy> | null} */
 	#reader: AsyncBatchReader<arrow.StructRowProxy> | null = null;
 
-	#sql = signal(undefined as string | undefined);
+	#sql = signal(undefined as Query | undefined);
 
 	constructor(source: DataTableOptions) {
 		super(Selection.crossfilter());
 		this.#format = formatof(source.schema);
 		this.#meta = source;
+		this.#select = Object.fromEntries(
+			this.#columns.map((column) => [column, column]),
+		);
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
 		// if maxHeight is set, calculate the number of rows to display
@@ -132,7 +137,7 @@ export class DataTable extends MosaicClient {
 	}
 
 	get sql() {
-		return this.#sql.value;
+		return this.#sql.value?.toString();
 	}
 
 	fields(): Array<FieldRequest> {
@@ -157,20 +162,21 @@ export class DataTable extends MosaicClient {
 		return this.#meta.schema.fields.map((field) => field.name);
 	}
 
-	/**
-	 * @param {Array<unknown>} filter
-	 */
 	query(filter: Array<unknown> = []) {
 		let query = Query.from(this.#meta.table)
-			.select(this.#columns)
+			.select(this.#select)
 			.where(filter)
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
 					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
 			);
-		this.#sql.value = query.clone().toString();
+		if (this.#sql.value?.toString() !== query.toString()) {
+			// only update the sql signal if the query has changed
+			this.#sql.value = query.clone();
+		}
 		return query
+			.select(this.#columns)
 			.limit(this.#limit)
 			.offset(this.#offset);
 	}
@@ -282,6 +288,16 @@ export class DataTable extends MosaicClient {
 			this.requestData();
 		});
 
+		signals.effect(() => {
+			this.#select = Object.fromEntries(
+				cols.map((col, i) => [col.nameState.value, this.#columns[i]]),
+			);
+			// TODO: set outside of effect ...
+			setTimeout(() => {
+				this.#sql.value = this.#sql.value?.clone().select(this.#select);
+			}, 0);
+		});
+
 		// @deno-fmt-ignore
 		this.#thead.appendChild(
 			html`<tr style=${{ height: this.#headerHeight }}>
@@ -353,12 +369,6 @@ export class DataTable extends MosaicClient {
 	}
 }
 
-const TRUNCATE = /** @type {const} */ ({
-	whiteSpace: "nowrap",
-	overflow: "hidden",
-	textOverflow: "ellipsis",
-});
-
 function thcol(
 	field: arrow.Field,
 	minWidth: number,
@@ -369,6 +379,7 @@ function thcol(
 	let sortState: signals.Signal<"unset" | "asc" | "desc"> = signals.signal(
 		"unset",
 	);
+	let name = signals.signal(field.name);
 
 	function nextSortState() {
 		// simple state machine
@@ -391,10 +402,56 @@ function thcol(
 		html`<div class="resize-handle"></div>`;
 	// @deno-fmt-ignore
 	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
+
+	// @deno-fmt-ignore
+	let input = html`<input
+		type="text"
+		maxlength="256"
+		placeholder=${name}
+		spellcheck="false"
+		value=${name}
+		onkeydown=${(event: KeyboardEvent) => {
+			if (event.key === "Enter") {
+				event.preventDefault();
+				// commit the change
+				name.value = input.value;
+				input.blur();
+				resetButton.style.display = "none";
+			}
+		}}
+		onfocus=${() => {
+			resetButton.style.display = "block";
+		}}
+		onblur=${() => {
+			resetButton.style.display = "none";
+		}}
+	>`;
+
+	let resetIcon =
+		html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M9 14 4 9l5-5"/>
+		<path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>
+	</svg>`;
+
+	// @deno-fmt-ignore
+	let resetButton = html`<button
+		aria-role="button"
+		class="reset-button"
+		style=${{ display: "none" }}
+		onmousedown=${() => {
+			input.value = field.name;
+			input.dispatchEvent(new Event("keydown", {
+				// @ts-expect-error - missing key
+				key: "Enter",
+			}));
+		}}
+	>${resetIcon}</button>`;
+
 	// @deno-fmt-ignore
 	let th: HTMLTableCellElement = html`<th style=${{ overflow: "hidden" }}>
-		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
+		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "25px" }}>
+			${input}
+			${resetButton}
 			${sortButton}
 		</div>
 		${verticalResizeHandle}
@@ -467,7 +524,7 @@ function thcol(
 		verticalResizeHandle.style.backgroundColor = "transparent";
 	});
 
-	return Object.assign(th, { vis, sortState });
+	return Object.assign(th, { vis, sortState, nameState: name });
 }
 
 /**

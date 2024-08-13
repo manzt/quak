@@ -3,7 +3,7 @@ import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 
 import { assert } from "./utils/assert.ts";
-import { datatable } from "./clients/DataTable.ts";
+import { DataTable, datatable } from "./clients/DataTable.ts";
 
 let dropzone = document.querySelector("input")!;
 let options = document.querySelector("#options")!;
@@ -52,6 +52,7 @@ function handleLoading(source: string | null) {
 	table.appendChild(loading);
 }
 
+let dt: DataTable;
 async function main() {
 	handleBanner();
 	let source = new URLSearchParams(location.search).get("source");
@@ -91,7 +92,7 @@ async function main() {
 	exec = exec.replace("json_format", "format");
 
 	await coordinator.exec([exec]);
-	let dt = await datatable(tableName, { coordinator, height: 500 });
+	dt = await datatable(tableName, { coordinator, height: 500 });
 	options.remove();
 	table.replaceChildren();
 	table.appendChild(dt.node());
@@ -116,5 +117,14 @@ async function main() {
 	);
 	exportButton.classList.remove("hidden");
 }
+
+import.meta.hot?.accept("./clients/DataTable.ts", async (mod) => {
+	dt = await mod.datatable("df", {
+		coordinator: dt.coordinator,
+		height: 500,
+	});
+	table.replaceChildren();
+	table.appendChild(dt.node());
+});
 
 main();
