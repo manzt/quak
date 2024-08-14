@@ -24,6 +24,7 @@ dev-dependencies = [
     "jupyterlab>=4.2.2",
     "watchfiles>=0.22.0",
     "vega-datasets>=0.9.0",
+    "polars>=1.4.1",
 ]
 
 [tool.ruff.lint]

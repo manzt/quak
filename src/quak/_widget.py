@@ -12,11 +12,11 @@ import traitlets
 from ._util import (
     arrow_table_from_dataframe_protocol,
     arrow_table_from_ipc,
-    ensure_duckdb_compatable_pyarrow_table,
     get_columns,
     has_pycapsule_stream_interface,
     is_arrow_ipc,
     is_dataframe_api_obj,
+    is_polars,
     table_to_ipc,
 )
 
@@ -41,14 +41,19 @@ class Widget(anywidget.AnyWidget):
             conn = data
         else:
             conn = duckdb.connect(":memory:")
-            if has_pycapsule_stream_interface(data):
+            if is_polars(data):
+                # FIXME: special case pl.DataFrame for now until DuckDB
+                # supports `[string,bytes]_view` Arrow data types
+                # see: https://github.com/manzt/quak/issues/41
+                # Polars .to_arrow() method will cast to non-view array types for us
+                arrow_table = data.to_arrow()
+            elif has_pycapsule_stream_interface(data):
                 # NOTE: for now we materialize the input into an in-memory Arrow table,
                 # so that we can perform repeated queries on that. In the future, it may
                 # be better to keep this Arrow stream non-materalized in Python and
                 # create a new DuckDB table from the stream.
                 # arrow_table = pa.RecordBatchReader.from_stream(data)
                 arrow_table = pa.table(data)
-                ensure_duckdb_compatable_pyarrow_table(arrow_table)
             elif is_arrow_ipc(data):
                 arrow_table = arrow_table_from_ipc(data)
             elif is_dataframe_api_obj(data):
