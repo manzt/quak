@@ -96,3 +96,14 @@ def get_columns(conn: duckdb.DuckDBPyConnection, table_name: str) -> list[str]:
     """)
     rows = result.fetchall()
     return [row[0] for row in rows]
+
+
+def ensure_duckdb_compatable_pyarrow_table(table: pa.lib.Table):
+    """Mutates a pyarrow table to be compatible with DuckDB."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    for i, name in enumerate(table.column_names):
+        column = table[name]
+        if pa.types.is_string_view(column.type):
+            table.set_column(i, name, pc.cast(column, pa.string()))

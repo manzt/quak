@@ -12,6 +12,7 @@ import traitlets
 from ._util import (
     arrow_table_from_dataframe_protocol,
     arrow_table_from_ipc,
+    ensure_duckdb_compatable_pyarrow_table,
     get_columns,
     has_pycapsule_stream_interface,
     is_arrow_ipc,
@@ -47,6 +48,7 @@ class Widget(anywidget.AnyWidget):
                 # create a new DuckDB table from the stream.
                 # arrow_table = pa.RecordBatchReader.from_stream(data)
                 arrow_table = pa.table(data)
+                ensure_duckdb_compatable_pyarrow_table(arrow_table)
             elif is_arrow_ipc(data):
                 arrow_table = arrow_table_from_ipc(data)
             elif is_dataframe_api_obj(data):
@@ -94,9 +96,9 @@ class Widget(anywidget.AnyWidget):
 
         total = round((time.time() - start) * 1_000)
         if total > SLOW_QUERY_THRESHOLD:
-            logger.warning(f"DONE. Slow query { uuid } took { total } ms.\n{ sql }")
+            logger.warning(f"DONE. Slow query {uuid} took {total} ms.\n{sql}")
         else:
-            logger.info(f"DONE. Query { uuid } took { total } ms.\n{ sql }")
+            logger.info(f"DONE. Query {uuid} took {total} ms.\n{sql}")
 
     def data(self) -> duckdb.DuckDBPyRelation:
         """Return the current SQL as a DuckDB relation."""
