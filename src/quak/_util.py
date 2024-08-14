@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import sys
 import typing
 
 DataFrameObject = typing.Any
 
 if typing.TYPE_CHECKING:
     import duckdb
+    import polars as pl
     import pyarrow as pa
 
 
@@ -96,3 +98,9 @@ def get_columns(conn: duckdb.DuckDBPyConnection, table_name: str) -> list[str]:
     """)
     rows = result.fetchall()
     return [row[0] for row in rows]
+
+
+def is_polars(obj: object) -> typing.TypeGuard[pl.DataFrame]:
+    """Check if an object is a Polars DataFrame."""
+    polars = sys.modules.get("polars")
+    return polars is not None and isinstance(obj, polars.DataFrame)

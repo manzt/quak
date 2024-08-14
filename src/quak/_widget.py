@@ -16,6 +16,7 @@ from ._util import (
     has_pycapsule_stream_interface,
     is_arrow_ipc,
     is_dataframe_api_obj,
+    is_polars,
     table_to_ipc,
 )
 
@@ -40,7 +41,13 @@ class Widget(anywidget.AnyWidget):
             conn = data
         else:
             conn = duckdb.connect(":memory:")
-            if has_pycapsule_stream_interface(data):
+            if is_polars(data):
+                # FIXME: special case pl.DataFrame for now until DuckDB
+                # supports `[string,bytes]_view` Arrow data types
+                # see: https://github.com/manzt/quak/issues/41
+                # Polars .to_arrow() method will cast to non-view array types for us
+                arrow_table = data.to_arrow()
+            elif has_pycapsule_stream_interface(data):
                 # NOTE: for now we materialize the input into an in-memory Arrow table,
                 # so that we can perform repeated queries on that. In the future, it may
                 # be better to keep this Arrow stream non-materalized in Python and
@@ -94,9 +101,9 @@ class Widget(anywidget.AnyWidget):
 
         total = round((time.time() - start) * 1_000)
         if total > SLOW_QUERY_THRESHOLD:
-            logger.warning(f"DONE. Slow query { uuid } took { total } ms.\n{ sql }")
+            logger.warning(f"DONE. Slow query {uuid} took {total} ms.\n{sql}")
         else:
-            logger.info(f"DONE. Query { uuid } took { total } ms.\n{ sql }")
+            logger.info(f"DONE. Query {uuid} took {total} ms.\n{sql}")
 
     def data(self) -> duckdb.DuckDBPyRelation:
         """Return the current SQL as a DuckDB relation."""
