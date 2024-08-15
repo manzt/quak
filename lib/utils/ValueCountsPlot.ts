@@ -2,6 +2,7 @@ import { effect, signal } from "@preact/signals-core";
 import type * as arrow from "apache-arrow";
 import * as d3 from "../deps/d3.ts";
 import { assert } from "./assert.ts";
+import { formatDataType } from "./formatting.ts";
 
 type CountTableData = arrow.Table<{
 	key: arrow.Utf8;
@@ -22,6 +23,7 @@ interface ValueCountsPlot {
 
 export function ValueCountsPlot(
 	data: CountTableData,
+	field: arrow.Field,
 	{
 		width = 125,
 		height = 30,
@@ -33,6 +35,8 @@ export function ValueCountsPlot(
 		backgroundBarColor = "rgb(226, 226, 226)",
 	}: ValueCountsPlot = {},
 ) {
+	const fieldType = formatDataType(field.type);
+
 	let root = document.createElement("div");
 	root.style.position = "relative";
 
@@ -64,6 +68,7 @@ export function ValueCountsPlot(
 	let hovering = signal<string | undefined>(undefined);
 	let selected = signal<string | undefined>(undefined);
 	let counts = signal<CountTableData>(data);
+	let countLabel = signal<string>(fieldType);
 
 	let hitArea = document.createElement("div");
 	Object.assign(hitArea.style, {
@@ -77,9 +82,28 @@ export function ValueCountsPlot(
 	});
 	hitArea.addEventListener("mousemove", (event) => {
 		hovering.value = bars.nearestX(event);
+
+		let update: Record<string, number> = Object.fromEntries(
+			Array.from(data.toArray(), (d) => [d.key, d.total]),
+		);
+
+		let total = Object.values(update).reduce((a, b) => a + b, 0);
+
+		const hoveredValue = hovering.value;
+		const hoveredValueCount = hoveredValue !== undefined
+			? update[hoveredValue]
+			: undefined;
+
+		countLabel.value =
+			hoveredValue !== undefined && hoveredValueCount !== undefined
+				? `${hoveredValueCount} row${hoveredValueCount === 1 ? "" : "s"} (${
+					d3.format(".1%")(hoveredValueCount / total)
+				})`
+				: fieldType;
 	});
 	hitArea.addEventListener("mouseout", () => {
 		hovering.value = undefined;
+		countLabel.value = fieldType;
 	});
 	hitArea.addEventListener("mousedown", (event) => {
 		let next = bars.nearestX(event);
@@ -89,6 +113,13 @@ export function ValueCountsPlot(
 	effect(() => {
 		text.textContent = bars.textFor(hovering.value ?? selected.value);
 		bars.render(counts.value, hovering.value, selected.value);
+
+		const labelElement = root.parentElement?.parentElement?.querySelector(
+			".gray",
+		);
+		if (labelElement) {
+			labelElement.textContent = countLabel.value;
+		}
 	});
 
 	root.appendChild(container);
@@ -151,8 +182,8 @@ function prepareData(data: CountTableData) {
 		.toSorted((a, b) => b.total - a.total);
 	let total = arr.reduce((acc, d) => acc + d.total, 0);
 	return {
-		bins: arr.filter((d) =>
-			d.key !== "__quak_null__" && d.key !== "__quak_unique__"
+		bins: arr.filter(
+			(d) => d.key !== "__quak_null__" && d.key !== "__quak_unique__",
 		),
 		nullCount: arr.find((d) => d.key === "__quak_null__")?.total ?? 0,
 		uniqueCount: arr.find((d) => d.key === "__quak_unique__")?.total ?? 0,
@@ -162,17 +193,21 @@ function prepareData(data: CountTableData) {
 
 type Entry = { key: string; total: number };
 
-function createBars(data: CountTableData, opts: {
-	width: number;
-	height: number;
-	marginRight: number;
-	marginLeft: number;
-	fillColor: string;
-	backgroundBarColor: string;
-	nullFillColor: string;
-}) {
+function createBars(
+	data: CountTableData,
+	opts: {
+		width: number;
+		height: number;
+		marginRight: number;
+		marginLeft: number;
+		fillColor: string;
+		backgroundBarColor: string;
+		nullFillColor: string;
+	},
+) {
 	let source = prepareData(data);
-	let x = d3.scaleLinear()
+	let x = d3
+		.scaleLinear()
 		.domain([0, source.total])
 		.range([opts.marginLeft, opts.width - opts.marginRight]);
 
@@ -196,10 +231,7 @@ function createBars(data: CountTableData, opts: {
 	let selectBar = createVirtualSelectionBar(opts);
 	let virtualBar: HTMLElement | undefined;
 	if (source.bins.length > thresh) {
-		let total = source.bins.slice(thresh).reduce(
-			(acc, d) => acc + d.total,
-			0,
-		);
+		let total = source.bins.slice(thresh).reduce((acc, d) => acc + d.total, 0);
 		virtualBar = Object.assign(document.createElement("div"), {
 			title: "__quak_virtual__",
 		});
@@ -238,12 +270,14 @@ function createBars(data: CountTableData, opts: {
 			height: opts.height,
 		});
 		bar.title = "__quak_unique__";
-		bars.push(Object.assign(bar, {
-			data: {
-				key: "__quak_unique__",
-				total: source.uniqueCount,
-			},
-		}));
+		bars.push(
+			Object.assign(bar, {
+				data: {
+					key: "__quak_unique__",
+					total: source.uniqueCount,
+				},
+			}),
+		);
 	}
 
 	if (source.nullCount) {
@@ -255,12 +289,14 @@ function createBars(data: CountTableData, opts: {
 			height: opts.height,
 		});
 		bar.title = "__quak_null__";
-		bars.push(Object.assign(bar, {
-			data: {
-				key: "__quak_null__",
-				total: source.uniqueCount,
-			},
-		}));
+		bars.push(
+			Object.assign(bar, {
+				data: {
+					key: "__quak_null__",
+					total: source.uniqueCount,
+				},
+			}),
+		);
 	}
 
 	let first = bars[0];
@@ -381,7 +417,7 @@ function createBars(data: CountTableData, opts: {
 				if (bar.title === "__quak_virtual__") {
 					let vbars = bar.firstChild as HTMLDivElement;
 					vbars.style.background = createVirtualBarRepeatingBackground({
-						color: (total < source.total) || selected
+						color: total < source.total || selected
 							? opts.backgroundBarColor
 							: opts.fillColor,
 					});
@@ -470,13 +506,17 @@ function nearestX({ clientX }: MouseEvent, bars: Array<HTMLElement>) {
 /**
  * Creates a fill gradient that is filled x% with a color and the rest with a background color.
  */
-function createSplitBarFill(
-	options: { color: string; bgColor: string; frac: number },
-) {
+function createSplitBarFill(options: {
+	color: string;
+	bgColor: string;
+	frac: number;
+}) {
 	let { color, bgColor, frac } = options;
 	let p = frac * 100;
 	// deno-fmt-ignore
-	return `linear-gradient(to top, ${color} ${p}%, ${bgColor} ${p}%, ${bgColor} ${100 - p}%)`;
+	return `linear-gradient(to top, ${color} ${p}%, ${bgColor} ${p}%, ${bgColor} ${
+    100 - p
+  }%)`;
 }
 
 function createVirtualBarRepeatingBackground({ color }: { color: string }) {
