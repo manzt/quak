@@ -182,8 +182,8 @@ function prepareData(data: CountTableData) {
 		.toSorted((a, b) => b.total - a.total);
 	let total = arr.reduce((acc, d) => acc + d.total, 0);
 	return {
-		bins: arr.filter(
-			(d) => d.key !== "__quak_null__" && d.key !== "__quak_unique__",
+		bins: arr.filter((d) =>
+			d.key !== "__quak_null__" && d.key !== "__quak_unique__"
 		),
 		nullCount: arr.find((d) => d.key === "__quak_null__")?.total ?? 0,
 		uniqueCount: arr.find((d) => d.key === "__quak_unique__")?.total ?? 0,
@@ -193,21 +193,17 @@ function prepareData(data: CountTableData) {
 
 type Entry = { key: string; total: number };
 
-function createBars(
-	data: CountTableData,
-	opts: {
-		width: number;
-		height: number;
-		marginRight: number;
-		marginLeft: number;
-		fillColor: string;
-		backgroundBarColor: string;
-		nullFillColor: string;
-	},
-) {
+function createBars(data: CountTableData, opts: {
+	width: number;
+	height: number;
+	marginRight: number;
+	marginLeft: number;
+	fillColor: string;
+	backgroundBarColor: string;
+	nullFillColor: string;
+}) {
 	let source = prepareData(data);
-	let x = d3
-		.scaleLinear()
+	let x = d3.scaleLinear()
 		.domain([0, source.total])
 		.range([opts.marginLeft, opts.width - opts.marginRight]);
 
@@ -231,7 +227,10 @@ function createBars(
 	let selectBar = createVirtualSelectionBar(opts);
 	let virtualBar: HTMLElement | undefined;
 	if (source.bins.length > thresh) {
-		let total = source.bins.slice(thresh).reduce((acc, d) => acc + d.total, 0);
+		let total = source.bins.slice(thresh).reduce(
+			(acc, d) => acc + d.total,
+			0,
+		);
 		virtualBar = Object.assign(document.createElement("div"), {
 			title: "__quak_virtual__",
 		});
@@ -270,14 +269,12 @@ function createBars(
 			height: opts.height,
 		});
 		bar.title = "__quak_unique__";
-		bars.push(
-			Object.assign(bar, {
-				data: {
-					key: "__quak_unique__",
-					total: source.uniqueCount,
-				},
-			}),
-		);
+		bars.push(Object.assign(bar, {
+			data: {
+				key: "__quak_unique__",
+				total: source.uniqueCount,
+			},
+		}));
 	}
 
 	if (source.nullCount) {
@@ -289,14 +286,12 @@ function createBars(
 			height: opts.height,
 		});
 		bar.title = "__quak_null__";
-		bars.push(
-			Object.assign(bar, {
-				data: {
-					key: "__quak_null__",
-					total: source.uniqueCount,
-				},
-			}),
-		);
+		bars.push(Object.assign(bar, {
+			data: {
+				key: "__quak_null__",
+				total: source.uniqueCount,
+			},
+		}));
 	}
 
 	let first = bars[0];
@@ -417,7 +412,7 @@ function createBars(
 				if (bar.title === "__quak_virtual__") {
 					let vbars = bar.firstChild as HTMLDivElement;
 					vbars.style.background = createVirtualBarRepeatingBackground({
-						color: total < source.total || selected
+						color: (total < source.total) || selected
 							? opts.backgroundBarColor
 							: opts.fillColor,
 					});
@@ -506,17 +501,13 @@ function nearestX({ clientX }: MouseEvent, bars: Array<HTMLElement>) {
 /**
  * Creates a fill gradient that is filled x% with a color and the rest with a background color.
  */
-function createSplitBarFill(options: {
-	color: string;
-	bgColor: string;
-	frac: number;
-}) {
+function createSplitBarFill(
+	options: { color: string; bgColor: string; frac: number },
+) {
 	let { color, bgColor, frac } = options;
 	let p = frac * 100;
 	// deno-fmt-ignore
-	return `linear-gradient(to top, ${color} ${p}%, ${bgColor} ${p}%, ${bgColor} ${
-    100 - p
-  }%)`;
+	return `linear-gradient(to top, ${color} ${p}%, ${bgColor} ${p}%, ${bgColor} ${100 - p}%)`;
 }
 
 function createVirtualBarRepeatingBackground({ color }: { color: string }) {

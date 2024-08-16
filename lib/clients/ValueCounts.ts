@@ -57,7 +57,8 @@ export class ValueCounts extends MosaicClient {
 	}
 
 	query(filter: Array<SQLExpression> = []): Query {
-		let counts = Query.from({ source: this.#table })
+		let counts = Query
+			.from({ source: this.#table })
 			.select({
 				value: sql`CASE
 					WHEN ${column(this.#column)} IS NULL THEN '__quak_null__'
@@ -67,14 +68,17 @@ export class ValueCounts extends MosaicClient {
 			})
 			.groupby("value")
 			.where(filter);
-		return Query.with({ counts })
-			.select({
-				key: sql`CASE
+		return Query
+			.with({ counts })
+			.select(
+				{
+					key: sql`CASE
 						WHEN "count" = 1 AND "value" != '__quak_null__' THEN '__quak_unique__'
 						ELSE "value"
 					END`,
-				total: sum("count"),
-			})
+					total: sum("count"),
+				},
+			)
 			.from("counts")
 			.groupby("key");
 	}
