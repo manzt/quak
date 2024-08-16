@@ -2,6 +2,7 @@ import { effect, signal } from "@preact/signals-core";
 import type * as arrow from "apache-arrow";
 import * as d3 from "../deps/d3.ts";
 import { assert } from "./assert.ts";
+import { formatDataType } from "./formatting.ts";
 
 type CountTableData = arrow.Table<{
 	key: arrow.Utf8;
@@ -22,6 +23,7 @@ interface ValueCountsPlot {
 
 export function ValueCountsPlot(
 	data: CountTableData,
+	field: arrow.Field,
 	{
 		width = 125,
 		height = 30,
@@ -33,6 +35,8 @@ export function ValueCountsPlot(
 		backgroundBarColor = "rgb(226, 226, 226)",
 	}: ValueCountsPlot = {},
 ) {
+	const fieldType = formatDataType(field.type);
+
 	let root = document.createElement("div");
 	root.style.position = "relative";
 
@@ -64,6 +68,7 @@ export function ValueCountsPlot(
 	let hovering = signal<string | undefined>(undefined);
 	let selected = signal<string | undefined>(undefined);
 	let counts = signal<CountTableData>(data);
+	let countLabel = signal<string>(fieldType);
 
 	let hitArea = document.createElement("div");
 	Object.assign(hitArea.style, {
@@ -77,9 +82,28 @@ export function ValueCountsPlot(
 	});
 	hitArea.addEventListener("mousemove", (event) => {
 		hovering.value = bars.nearestX(event);
+
+		let update: Record<string, number> = Object.fromEntries(
+			Array.from(data.toArray(), (d) => [d.key, d.total]),
+		);
+
+		let total = Object.values(update).reduce((a, b) => a + b, 0);
+
+		const hoveredValue = hovering.value;
+		const hoveredValueCount = hoveredValue !== undefined
+			? update[hoveredValue]
+			: undefined;
+
+		countLabel.value =
+			hoveredValue !== undefined && hoveredValueCount !== undefined
+				? `${hoveredValueCount} row${hoveredValueCount === 1 ? "" : "s"} (${
+					d3.format(".1%")(hoveredValueCount / total)
+				})`
+				: fieldType;
 	});
 	hitArea.addEventListener("mouseout", () => {
 		hovering.value = undefined;
+		countLabel.value = fieldType;
 	});
 	hitArea.addEventListener("mousedown", (event) => {
 		let next = bars.nearestX(event);
@@ -89,6 +113,13 @@ export function ValueCountsPlot(
 	effect(() => {
 		text.textContent = bars.textFor(hovering.value ?? selected.value);
 		bars.render(counts.value, hovering.value, selected.value);
+
+		const labelElement = root.parentElement?.parentElement?.querySelector(
+			".gray",
+		);
+		if (labelElement) {
+			labelElement.textContent = countLabel.value;
+		}
 	});
 
 	root.appendChild(container);

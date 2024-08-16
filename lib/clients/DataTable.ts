@@ -265,7 +265,7 @@ export class DataTable extends MosaicClient {
 			} else {
 				vis = new ValueCounts({
 					table: this.#meta.table,
-					column: field.name,
+					field: field,
 					filterBy: this.filterBy!,
 				});
 			}
