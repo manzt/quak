@@ -20,6 +20,8 @@ import { assert } from "../utils/assert.ts";
 interface HistogramOptions {
 	/** The table to query. */
 	table: string;
+	/** An arrow Field containing the column info to use for the histogram. */
+	field: arrow.Field;
 	/** The column to use for the histogram. */
 	column: string;
 	/** The type of the column. Must be "number" or "date". */
@@ -32,7 +34,12 @@ type BinTable = arrow.Table<{ x1: arrow.Int; x2: arrow.Int; y: arrow.Int }>;
 
 /** Represents a Cross-filtered Histogram */
 export class Histogram extends MosaicClient implements Mark {
-	#source: { table: string; column: string; type: "number" | "date" };
+	#source: {
+		table: string;
+		column: string;
+		field: arrow.Field;
+		type: "number" | "date";
+	};
 	#el: HTMLElement = document.createElement("div");
 	#select: {
 		x1: ColumnField;
@@ -47,7 +54,12 @@ export class Histogram extends MosaicClient implements Mark {
 
 	constructor(options: HistogramOptions) {
 		super(options.filterBy);
-		this.#source = options;
+		this.#source = {
+			table: options.table,
+			column: options.field.name,
+			field: options.field,
+			type: options.type,
+		};
 		// calls this.channelField internally
 		let bin = mplot.bin(options.column)(this, "x");
 		this.#select = { x1: bin.x1, x2: bin.x2, y: count() };
@@ -102,7 +114,7 @@ export class Histogram extends MosaicClient implements Mark {
 			bins.splice(nullBinIndex, 1);
 		}
 		if (!this.#initialized) {
-			this.svg = CrossfilterHistogramPlot(bins, {
+			this.svg = CrossfilterHistogramPlot(bins, this.#source.field, {
 				nullCount,
 				type: this.#source.type,
 			});

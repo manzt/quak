@@ -259,6 +259,7 @@ export class DataTable extends MosaicClient {
 				vis = new Histogram({
 					table: this.#meta.table,
 					column: field.name,
+					field: field,
 					type: info.type,
 					filterBy: this.filterBy!,
 				});
