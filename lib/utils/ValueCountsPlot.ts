@@ -2,7 +2,7 @@ import { effect, signal } from "@preact/signals-core";
 import type * as arrow from "apache-arrow";
 import * as d3 from "../deps/d3.ts";
 import { assert } from "./assert.ts";
-import { formatDataType } from "./formatting.ts";
+import { formatDataType, percentFormatter } from "./formatting.ts";
 
 type CountTableData = arrow.Table<{
 	key: arrow.Utf8;
@@ -97,7 +97,7 @@ export function ValueCountsPlot(
 		countLabel.value =
 			hoveredValue !== undefined && hoveredValueCount !== undefined
 				? `${hoveredValueCount} row${hoveredValueCount === 1 ? "" : "s"} (${
-					d3.format(".1%")(hoveredValueCount / total)
+					percentFormatter(hoveredValueCount / total)
 				})`
 				: fieldType;
 	});

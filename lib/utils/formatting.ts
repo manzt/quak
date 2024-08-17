@@ -1,5 +1,6 @@
 import { Temporal } from "@js-temporal/polyfill";
 import * as arrow from "apache-arrow";
+import { format } from "d3-format";
 
 /**
  * A utility function to create a formatter for a given data type.
@@ -222,4 +223,19 @@ function durationFromTimeUnit(value: number | bigint, unit: arrow.TimeUnit) {
 		return Temporal.Duration.from({ nanoseconds: value });
 	}
 	throw new Error("Invalid TimeUnit");
+}
+
+/**
+ * Formats a number as a percentage string with varying precision based on the value's magnitude.
+ * @param {number} value - The value to be formatted as a percentage.
+ * @returns {string} A formatted percentage string.
+ */
+export function percentFormatter(value: number): string {
+	if (value >= 0.1) {
+		return format(".0%")(value);
+	} else if (value >= 0.01) {
+		return format(".1%")(value);
+	} else {
+		return format(".2%")(value);
+	}
 }
