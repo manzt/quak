@@ -121,9 +121,18 @@ async function main() {
 
 main();
 
-import.meta.hot?.accept("./clients/DataTable.ts", async ({ datatable }) => {
-	coordinator.disconnect(dt);
-	dt = await datatable("df", { coordinator: dt.coordinator, height: 500 });
-	table.replaceChildren();
-	table.appendChild(dt.node());
-});
+// Allows for hot-reloading of the data table code without needing to reload
+// the input data source with duckdb.
+// @ts-expect-error - HMR types not working with Deno
+if (import.meta.hot) {
+	// @ts-expect-error - HMR types not working with Deno
+	import.meta.hot.accept("./clients/DataTable.ts", async ({ datatable }) => {
+		coordinator.disconnect(dt);
+		dt = await datatable("df", {
+			coordinator: dt.coordinator,
+			height: 500,
+		});
+		table.replaceChildren();
+		table.appendChild(dt.node());
+	});
+}
