@@ -71,8 +71,8 @@ export class DataTable extends MosaicClient {
 	#orderby: Array<{ field: string; order: "asc" | "desc" | "unset" }> = [];
 	/** template row for data */
 	#templateRow: HTMLTableRowElement | undefined = undefined;
-	/** div containing the table */
-	#tableRoot: HTMLDivElement;
+	/** Div containing the table and status bar */
+	#quakRoot: HTMLDivElement;
 	/** offset into the data */
 	#offset: number = 0;
 	/** number of rows to fetch */
@@ -107,29 +107,30 @@ export class DataTable extends MosaicClient {
 			maxHeight = `${source.height}px`;
 		}
 
-		let root = html`<div class="quak"></div>`;
-		this.#tableRoot = html`<div class="table-container" style=${{
-			maxHeight,
-		}}>`;
+		let tableRoot = html`<div class="table-container" style=${{ maxHeight }}>`;
 		// @deno-fmt-ignore
-		this.#tableRoot.appendChild(
+		tableRoot.appendChild(
 			html.fragment`<table style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
 		);
-		root.appendChild(this.#tableRoot);
-		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
-		this.#shadowRoot.appendChild(root);
-
-		addDirectionalScrollWithPreventDefault(this.#tableRoot);
+		addDirectionalScrollWithPreventDefault(tableRoot);
 
 		// scroll event listener
-		this.#tableRoot.addEventListener("scroll", async () => {
-			let isAtBottom =
-				this.#tableRoot.scrollHeight - this.#tableRoot.scrollTop <
-					this.#rows * this.#rowHeight * 1.5;
+		tableRoot.addEventListener("scroll", async () => {
+			let isAtBottom = tableRoot.scrollHeight - tableRoot.scrollTop <
+				this.#rows * this.#rowHeight * 1.5;
 			if (isAtBottom) {
 				await this.#appendRows(this.#rows);
 			}
 		});
+
+		this.#quakRoot = html`<div class="quak"></div>`;
+		this.#quakRoot.appendChild(tableRoot);
+		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
+		this.#shadowRoot.appendChild(this.#quakRoot);
+	}
+
+	get #tableRoot(): HTMLDivElement {
+		return this.#shadowRoot.querySelector(".table-container")!;
 	}
 
 	get sql() {
@@ -150,8 +151,11 @@ export class DataTable extends MosaicClient {
 
 	resize(height: number) {
 		this.#rows = Math.floor(height / this.#rowHeight);
-		this.#tableRoot.style.maxHeight = `${height}px`;
-		this.#tableRoot.scrollTop = 0;
+		let table: HTMLDivElement = this.#quakRoot.querySelector(
+			".table-container",
+		)!;
+		table.style.maxHeight = `${height}px`;
+		table.scrollTop = 0;
 	}
 
 	get #columns() {
