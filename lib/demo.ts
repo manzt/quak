@@ -3,7 +3,7 @@ import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 
 import { assert } from "./utils/assert.ts";
-import { datatable } from "./clients/DataTable.ts";
+import { DataTable, datatable } from "./clients/DataTable.ts";
 
 let dropzone = document.querySelector("input")!;
 let options = document.querySelector("#options")!;
@@ -52,12 +52,14 @@ function handleLoading(source: string | null) {
 	table.appendChild(loading);
 }
 
+let dt: DataTable;
+let tableName = "df";
+let coordinator = new mc.Coordinator();
+
 async function main() {
 	handleBanner();
 	let source = new URLSearchParams(location.search).get("source");
 	handleLoading(source);
-	let tableName = "df";
-	let coordinator = new mc.Coordinator();
 	let connector = mc.wasmConnector();
 	let db = await connector.getDuckDB();
 	coordinator.databaseConnector(connector);
@@ -91,7 +93,7 @@ async function main() {
 	exec = exec.replace("json_format", "format");
 
 	await coordinator.exec([exec]);
-	let dt = await datatable(tableName, { coordinator, height: 500 });
+	dt = await datatable(tableName, { coordinator, height: 500 });
 	options.remove();
 	table.replaceChildren();
 	table.appendChild(dt.node());
@@ -118,3 +120,10 @@ async function main() {
 }
 
 main();
+
+import.meta.hot?.accept("./clients/DataTable.ts", async ({ datatable }) => {
+	coordinator.disconnect(dt);
+	dt = await datatable("df", { coordinator: dt.coordinator, height: 500 });
+	table.replaceChildren();
+	table.appendChild(dt.node());
+});

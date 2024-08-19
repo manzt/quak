@@ -107,16 +107,17 @@ export class DataTable extends MosaicClient {
 			maxHeight = `${source.height}px`;
 		}
 
-		let root: HTMLDivElement = html`<div class="quak" style=${{
+		let root = html`<div class="quak"></div>`;
+		this.#tableRoot = html`<div class="table-container" style=${{
 			maxHeight,
 		}}>`;
 		// @deno-fmt-ignore
-		root.appendChild(
+		this.#tableRoot.appendChild(
 			html.fragment`<table style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
 		);
+		root.appendChild(this.#tableRoot);
 		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
 		this.#shadowRoot.appendChild(root);
-		this.#tableRoot = root;
 
 		addDirectionalScrollWithPreventDefault(this.#tableRoot);
 
@@ -226,7 +227,9 @@ export class DataTable extends MosaicClient {
 				filterBy: this.filterBy,
 			});
 			this.coordinator.connect(statusBar);
-			this.#shadowRoot.appendChild(statusBar.node());
+			this.#shadowRoot.querySelector(".quak")?.appendChild(
+				statusBar.node(),
+			);
 		}
 
 		// @deno-fmt-ignore
