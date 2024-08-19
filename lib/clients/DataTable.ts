@@ -71,8 +71,6 @@ export class DataTable extends MosaicClient {
 	#orderby: Array<{ field: string; order: "asc" | "desc" | "unset" }> = [];
 	/** template row for data */
 	#templateRow: HTMLTableRowElement | undefined = undefined;
-	/** Div containing the table and status bar */
-	#quakRoot: HTMLDivElement;
 	/** offset into the data */
 	#offset: number = 0;
 	/** number of rows to fetch */
@@ -123,10 +121,10 @@ export class DataTable extends MosaicClient {
 			}
 		});
 
-		this.#quakRoot = html`<div class="quak"></div>`;
-		this.#quakRoot.appendChild(tableRoot);
+		let container = html`<div class="quak"></div>`;
+		container.appendChild(tableRoot);
 		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
-		this.#shadowRoot.appendChild(this.#quakRoot);
+		this.#shadowRoot.appendChild(container);
 	}
 
 	get #tableRoot(): HTMLDivElement {
@@ -151,11 +149,8 @@ export class DataTable extends MosaicClient {
 
 	resize(height: number) {
 		this.#rows = Math.floor(height / this.#rowHeight);
-		let table: HTMLDivElement = this.#quakRoot.querySelector(
-			".table-container",
-		)!;
-		table.style.maxHeight = `${height}px`;
-		table.scrollTop = 0;
+		this.#tableRoot.style.maxHeight = `${height}px`;
+		this.#tableRoot.scrollTop = 0;
 	}
 
 	get #columns() {
