@@ -71,8 +71,6 @@ export class DataTable extends MosaicClient {
 	#orderby: Array<{ field: string; order: "asc" | "desc" | "unset" }> = [];
 	/** template row for data */
 	#templateRow: HTMLTableRowElement | undefined = undefined;
-	/** div containing the table */
-	#tableRoot: HTMLDivElement;
 	/** offset into the data */
 	#offset: number = 0;
 	/** number of rows to fetch */
@@ -107,28 +105,30 @@ export class DataTable extends MosaicClient {
 			maxHeight = `${source.height}px`;
 		}
 
-		let root: HTMLDivElement = html`<div class="quak" style=${{
-			maxHeight,
-		}}>`;
+		let tableRoot = html`<div class="table-container" style=${{ maxHeight }}>`;
 		// @deno-fmt-ignore
-		root.appendChild(
+		tableRoot.appendChild(
 			html.fragment`<table style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
 		);
-		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
-		this.#shadowRoot.appendChild(root);
-		this.#tableRoot = root;
-
-		addDirectionalScrollWithPreventDefault(this.#tableRoot);
+		addDirectionalScrollWithPreventDefault(tableRoot);
 
 		// scroll event listener
-		this.#tableRoot.addEventListener("scroll", async () => {
-			let isAtBottom =
-				this.#tableRoot.scrollHeight - this.#tableRoot.scrollTop <
-					this.#rows * this.#rowHeight * 1.5;
+		tableRoot.addEventListener("scroll", async () => {
+			let isAtBottom = tableRoot.scrollHeight - tableRoot.scrollTop <
+				this.#rows * this.#rowHeight * 1.5;
 			if (isAtBottom) {
 				await this.#appendRows(this.#rows);
 			}
 		});
+
+		let container = html`<div class="quak"></div>`;
+		container.appendChild(tableRoot);
+		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
+		this.#shadowRoot.appendChild(container);
+	}
+
+	get #tableRoot(): HTMLDivElement {
+		return this.#shadowRoot.querySelector(".table-container")!;
 	}
 
 	get sql() {
@@ -226,7 +226,9 @@ export class DataTable extends MosaicClient {
 				filterBy: this.filterBy,
 			});
 			this.coordinator.connect(statusBar);
-			this.#shadowRoot.appendChild(statusBar.node());
+			this.#shadowRoot.querySelector(".quak")?.appendChild(
+				statusBar.node(),
+			);
 		}
 
 		// @deno-fmt-ignore
