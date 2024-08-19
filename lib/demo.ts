@@ -129,7 +129,7 @@ if (import.meta.hot) {
 	import.meta.hot.accept("./clients/DataTable.ts", async ({ datatable }) => {
 		coordinator.disconnect(dt);
 		dt = await datatable("df", {
-			coordinator: dt.coordinator,
+			coordinator,
 			height: 500,
 		});
 		table.replaceChildren();
