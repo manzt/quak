@@ -68,6 +68,8 @@ async function main() {
 	if (source) {
 		exec = source.endsWith(".csv")
 			? msql.loadCSV(tableName, source, { replace: true })
+			: source.endsWith(".tsv")
+			? msql.loadCSV(tableName, source, { replace: true, delim: "\t" })
 			: source.endsWith(".json")
 			? msql.loadJSON(tableName, source, { replace: true })
 			: msql.loadParquet(tableName, source, { replace: true });
@@ -79,6 +81,12 @@ async function main() {
 		} else if (file.name.endsWith(".json")) {
 			await db.registerFileText(file.name, await file.text());
 			exec = msql.loadJSON(tableName, file.name, { replace: true });
+		} else if (file.name.endsWith(".tsv")) {
+			await db.registerFileText(file.name, await file.text());
+			exec = msql.loadCSV(tableName, file.name, {
+				replace: true,
+				delim: "\t",
+			});
 		} else {
 			assert(file.name.endsWith(".parquet"));
 			await db.registerFileBuffer(
