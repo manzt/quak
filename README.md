@@ -13,7 +13,7 @@ capturing interactions as executable SQL queries.
 
 - **interactive** 🖱️ mouse over column summaries, cross-filter, sort, and slice rows.
 - **fast** ⚡ built with [Mosaic](https://github.com/uwdata/mosaic); views are expressed as SQL queries lazily executed by [DuckDB](https://duckdb.org/).
-- **flexible** 🔄 supports many data types and formats via [Apache Arrow](https://arrow.apache.org/docs/index.html) and the [dataframe interchange protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html).
+- **flexible** 🔄 supports many data types and formats via [Apache Arrow](https://arrow.apache.org/docs/index.html), the [dataframe interchange protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html), and the [Arrow PyCapsule Interface](https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html).
 - **reproducible** 📓 a UI for building complex SQL queries; materialize views in the kernel for further analysis.
 
 ## install
@@ -47,7 +47,7 @@ df
 
 **quak** hooks into Jupyter's display mechanism to automatically render any
 dataframe-like object (implementing the [Python dataframe interchange
-protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html))
+protocol](https://data-apis.org/dataframe-protocol/latest/purpose_and_scope.html) or [Arrow PyCapsule Interface](https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html))
 using `quak.Widget` instead of the default display.
 
 Alternatively, you can use `quak.Widget` directly:
