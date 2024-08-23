@@ -135,7 +135,7 @@ async function main() {
 		if (source?.startsWith("http://") || source?.startsWith("https://")) {
 			// we need to replace the source with the actual URL
 			let file = new URL(source).pathname.split("/").pop()!;
-			from = from.replace(file, source);
+			from = from.replace(`'${file}'`, `'${source}'`);
 		}
 		let sql = dt.sql?.replace(' FROM "df"', from);
 		navigator.clipboard.writeText(sql!);
