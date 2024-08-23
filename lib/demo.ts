@@ -5,12 +5,17 @@ import * as msql from "@uwdata/mosaic-sql";
 import { assert } from "./utils/assert.ts";
 import { DataTable, datatable } from "./clients/DataTable.ts";
 
+interface DuckDBClient {
+	registerFileText(name: string, text: string): Promise<void>;
+	registerFileBuffer(name: string, buffer: Uint8Array): Promise<void>;
+}
+
 let dropzone = document.querySelector("input")!;
 let options = document.querySelector("#options")!;
 let table = document.querySelector("#table")!;
 let exportButton = document.querySelector("#export")! as HTMLButtonElement;
 
-function getFile(): Promise<File> {
+function getFileSelect(): Promise<File> {
 	return new Promise((resolve) => {
 		// on input file change
 		dropzone.addEventListener("input", (e) => {
@@ -52,6 +57,53 @@ function handleLoading(source: string | null) {
 	table.appendChild(loading);
 }
 
+async function getUrl(source: URL, { db }: { db: DuckDBClient }) {
+	/**
+	 * DuckDB for whatever reason tries to make range requests for CSV/JSON files
+	 * We manually fetch TEXT files here and register them with DuckDB.
+	 */
+	if (
+		source.pathname.endsWith(".csv") ||
+		source.pathname.endsWith(".tsv") ||
+		source.pathname.endsWith(".json")
+	) {
+		let file = source.pathname.split("/").pop() ?? "";
+		let response = await fetch(source);
+		await db.registerFileText(file, await response.text());
+		if (file.endsWith(".csv")) {
+			return msql.loadCSV("df", file, { replace: true });
+		}
+		if (file.endsWith(".tsv")) {
+			return msql.loadCSV("df", file, { replace: true, delim: "\t" });
+		}
+		if (file.endsWith(".json")) {
+			return msql.loadJSON("df", file, { replace: true });
+		}
+	}
+	assert(source.pathname.endsWith(".parquet"), "Unsupported file format.");
+	return msql.loadParquet(tableName, source, { replace: true });
+}
+
+async function getFile(file: File, { db }: { db: DuckDBClient }) {
+	let name = file.name;
+	if (name.endsWith(".csv")) {
+		await db.registerFileText(name, await file.text());
+		return msql.loadCSV(tableName, name, { replace: true });
+	}
+	if (name.endsWith(".tsv")) {
+		await db.registerFileText(name, await file.text());
+		return msql.loadCSV(tableName, name, { replace: true, delim: "\t" });
+	}
+	if (name.endsWith(".json")) {
+		await db.registerFileText(name, await file.text());
+		return msql.loadJSON(tableName, name, { replace: true });
+	}
+	assert(name.endsWith(".parquet"));
+	let bytes = new Uint8Array(await file.arrayBuffer());
+	await db.registerFileBuffer(name, bytes);
+	return msql.loadParquet(tableName, name, { replace: true });
+}
+
 let dt: DataTable;
 let tableName = "df";
 let coordinator = new mc.Coordinator();
@@ -61,41 +113,12 @@ async function main() {
 	let source = new URLSearchParams(location.search).get("source");
 	handleLoading(source);
 	let connector = mc.wasmConnector();
-	let db = await connector.getDuckDB();
+	let db: DuckDBClient = await connector.getDuckDB();
 	coordinator.databaseConnector(connector);
 
-	let exec: string;
-	if (source) {
-		exec = source.endsWith(".csv")
-			? msql.loadCSV(tableName, source, { replace: true })
-			: source.endsWith(".tsv")
-			? msql.loadCSV(tableName, source, { replace: true, delim: "\t" })
-			: source.endsWith(".json")
-			? msql.loadJSON(tableName, source, { replace: true })
-			: msql.loadParquet(tableName, source, { replace: true });
-	} else {
-		let file = await getFile();
-		if (file.name.endsWith(".csv")) {
-			await db.registerFileText(file.name, await file.text());
-			exec = msql.loadCSV(tableName, file.name, { replace: true });
-		} else if (file.name.endsWith(".json")) {
-			await db.registerFileText(file.name, await file.text());
-			exec = msql.loadJSON(tableName, file.name, { replace: true });
-		} else if (file.name.endsWith(".tsv")) {
-			await db.registerFileText(file.name, await file.text());
-			exec = msql.loadCSV(tableName, file.name, {
-				replace: true,
-				delim: "\t",
-			});
-		} else {
-			assert(file.name.endsWith(".parquet"));
-			await db.registerFileBuffer(
-				file.name,
-				new Uint8Array(await file.arrayBuffer()),
-			);
-			exec = msql.loadParquet(tableName, file.name, { replace: true });
-		}
-	}
+	let exec = source
+		? await getUrl(new URL(source), { db })
+		: await getFile(await getFileSelect(), { db });
 
 	// Bug in mosaic-sql
 	exec = exec.replace("json_format", "format");
@@ -109,6 +132,11 @@ async function main() {
 	function copyToClipboard() {
 		let from = exec.match(/ FROM .*$/)?.[0];
 		assert(from, "Could not find FROM clause in exec string.");
+		if (source?.startsWith("http://") || source?.startsWith("https://")) {
+			// we need to replace the source with the actual URL
+			let file = new URL(source).pathname.split("/").pop()!;
+			from = from.replace(file, source);
+		}
 		let sql = dt.sql?.replace(' FROM "df"', from);
 		navigator.clipboard.writeText(sql!);
 		const icons = exportButton.querySelectorAll("svg")!;
