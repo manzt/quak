@@ -5,6 +5,11 @@ import * as msql from "@uwdata/mosaic-sql";
 import { assert } from "./utils/assert.ts";
 import { DataTable, datatable } from "./clients/DataTable.ts";
 
+interface DuckDBClient {
+	registerFileText(name: string, text: string): Promise<void>;
+	registerFileBuffer(name: string, buffer: Uint8Array): Promise<void>;
+}
+
 let dropzone = document.querySelector("input")!;
 let options = document.querySelector("#options")!;
 let table = document.querySelector("#table")!;
@@ -52,79 +57,51 @@ function handleLoading(source: string | null) {
 	table.appendChild(loading);
 }
 
-/**
- * DuckDB for whatever reason tries to make range requests for CSV/JSON files
- * We manually fetch TEXT files here and register them with DuckDB.
- */
-async function fetchAndRegisterTextFile(
-	db: { registerFileText: (name: string, text: string) => Promise<void> },
-	source: URL,
-): Promise<string> {
-	let file = source.pathname.split("/").pop() ?? "";
-	let response = await fetch(source);
-	await db.registerFileText(file, await response.text());
-	if (file.endsWith(".csv")) {
-		return msql.loadCSV("df", file, { replace: true });
-	}
-	if (file.endsWith(".tsv")) {
-		return msql.loadCSV("df", file, { replace: true, delim: "\t" });
-	}
-	if (file.endsWith(".json")) {
-		return msql.loadJSON("df", file, { replace: true });
-	}
-	throw new Error("Unsupported file format.");
-}
-
-function getUrl(
-	source: URL,
-	options: {
-		db: { registerFileText: (name: string, text: string) => Promise<void> };
-	},
-) {
+async function getUrl(source: URL, { db }: { db: DuckDBClient }) {
+	/**
+	 * DuckDB for whatever reason tries to make range requests for CSV/JSON files
+	 * We manually fetch TEXT files here and register them with DuckDB.
+	 */
 	if (
 		source.pathname.endsWith(".csv") ||
 		source.pathname.endsWith(".tsv") ||
 		source.pathname.endsWith(".json")
 	) {
-		return fetchAndRegisterTextFile(options.db, source);
+		let file = source.pathname.split("/").pop() ?? "";
+		let response = await fetch(source);
+		await db.registerFileText(file, await response.text());
+		if (file.endsWith(".csv")) {
+			return msql.loadCSV("df", file, { replace: true });
+		}
+		if (file.endsWith(".tsv")) {
+			return msql.loadCSV("df", file, { replace: true, delim: "\t" });
+		}
+		if (file.endsWith(".json")) {
+			return msql.loadJSON("df", file, { replace: true });
+		}
 	}
 	assert(source.pathname.endsWith(".parquet"), "Unsupported file format.");
 	return msql.loadParquet(tableName, source, { replace: true });
 }
 
-async function getFile(
-	file: File,
-	{ db }: {
-		db: {
-			registerFileText: (name: string, text: string) => Promise<void>;
-			registerFileBuffer: (
-				name: string,
-				buffer: Uint8Array,
-			) => Promise<void>;
-		};
-	},
-) {
-	if (file.name.endsWith(".csv")) {
-		await db.registerFileText(file.name, await file.text());
-		return msql.loadCSV(tableName, file.name, { replace: true });
+async function getFile(file: File, { db }: { db: DuckDBClient }) {
+	let name = file.name;
+	if (name.endsWith(".csv")) {
+		await db.registerFileText(name, await file.text());
+		return msql.loadCSV(tableName, name, { replace: true });
 	}
-	if (file.name.endsWith(".tsv")) {
-		await db.registerFileText(file.name, await file.text());
-		return msql.loadCSV(tableName, file.name, {
-			replace: true,
-			delim: "\t",
-		});
+	if (name.endsWith(".tsv")) {
+		await db.registerFileText(name, await file.text());
+		return msql.loadCSV(tableName, name, { replace: true, delim: "\t" });
 	}
-	if (file.name.endsWith(".json")) {
-		await db.registerFileText(file.name, await file.text());
-		return msql.loadJSON(tableName, file.name, { replace: true });
+	if (name.endsWith(".json")) {
+		await db.registerFileText(name, await file.text());
+		return msql.loadJSON(tableName, name, { replace: true });
 	}
-	assert(file.name.endsWith(".parquet"));
-	await db.registerFileBuffer(
-		file.name,
-		new Uint8Array(await file.arrayBuffer()),
-	);
-	return msql.loadParquet(tableName, file.name, { replace: true });
+	assert(name.endsWith(".parquet"));
+	let bytes = new Uint8Array(await file.arrayBuffer());
+	await db.registerFileBuffer(name, bytes);
+	return msql.loadParquet(tableName, name, { replace: true });
 }
 
 let dt: DataTable;
@@ -136,7 +113,7 @@ async function main() {
 	let source = new URLSearchParams(location.search).get("source");
 	handleLoading(source);
 	let connector = mc.wasmConnector();
-	let db = await connector.getDuckDB();
+	let db: DuckDBClient = await connector.getDuckDB();
 	coordinator.databaseConnector(connector);
 
 	let exec = source
