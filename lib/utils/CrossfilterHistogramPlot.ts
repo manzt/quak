@@ -52,23 +52,22 @@ export function CrossfilterHistogramPlot(
 	let countLabel = signal<string>(fieldType);
 	let nullBinWidth = nullCount === 0 ? 0 : 5;
 	let spacing = nullBinWidth ? 4 : 0;
-	let extent = /** @type {const} */ [
+	let extent = /** @type {const} */ ([
 		Math.min(...bins.map((d) => d.x0)),
 		Math.max(...bins.map((d) => d.x1)),
-	];
+	]);
 	let x = type === "date" ? d3.scaleUtc() : d3.scaleLinear();
-	x.domain(extent)
+	x
+		.domain(extent)
 		// @ts-expect-error - range is ok with number for both number and time
 		.range([marginLeft + nullBinWidth + spacing, width - marginRight])
 		.nice();
 
-	let y = d3
-		.scaleLinear()
+	let y = d3.scaleLinear()
 		.domain([0, Math.max(nullCount, ...bins.map((d) => d.length))])
 		.range([height - marginBottom, marginTop]);
 
-	let svg = d3
-		.create("svg")
+	let svg = d3.create("svg")
 		.attr("width", width)
 		.attr("height", height)
 		.attr("viewBox", [0, 0, width, height])
@@ -76,8 +75,7 @@ export function CrossfilterHistogramPlot(
 
 	{
 		// background bars with the "total" bins
-		svg
-			.append("g")
+		svg.append("g")
 			.attr("fill", backgroundBarColor)
 			.selectAll("rect")
 			.data(bins)
@@ -89,7 +87,9 @@ export function CrossfilterHistogramPlot(
 	}
 
 	// Foreground bars for the current subset
-	let foregroundBarGroup = svg.append("g").attr("fill", fillColor);
+	let foregroundBarGroup = svg
+			.append("g")
+			.attr("fill", fillColor);
 
 	// Min and max values labels
 	const axes = svg
@@ -136,9 +136,11 @@ export function CrossfilterHistogramPlot(
 			.text(`${fmt(hovered.value ?? xmin)}`)
 			.attr("visibility", hovered.value ? "visible" : "hidden");
 
-		const hoveredTickText = hoveredTick.select("text").node() as SVGTextElement;
+		const hoveredTickText = hoveredTick
+				.select("text")
+				.node() as SVGTextElement;
 		const bbox = hoveredTickText.getBBox();
-		const cond = x(hovered.value ?? xmin) + bbox.width > x(xmax);
+		const cond = (x(hovered.value ?? xmin) + bbox.width) > x(xmax);
 
 		hoveredTickText.setAttribute("text-anchor", cond ? "end" : "start");
 		hoveredTickText.setAttribute("dx", cond ? "-0.25em" : "0.25em");
@@ -160,11 +162,11 @@ export function CrossfilterHistogramPlot(
 	/** @type {typeof foregroundBarGroup | undefined} */
 	let foregroundNullGroup: typeof foregroundBarGroup | undefined = undefined;
 	if (nullCount > 0) {
-		let xnull = d3.scaleLinear().range([marginLeft, marginLeft + nullBinWidth]);
+		let xnull = d3.scaleLinear()
+				.range([marginLeft, marginLeft + nullBinWidth]);
 
 		// background bar for the null bin
-		svg
-			.append("g")
+		svg.append("g")
 			.attr("fill", backgroundBarColor)
 			.append("rect")
 			.attr("x", xnull(0))
@@ -177,20 +179,21 @@ export function CrossfilterHistogramPlot(
 			.attr("fill", nullFillColor)
 			.attr("color", nullFillColor);
 
-		foregroundNullGroup
-			.append("rect")
+		foregroundNullGroup.append("rect")
 			.attr("x", xnull(0))
 			.attr("width", xnull(1) - xnull(0));
 
 		// Append the x-axis and add a null tick
-		let axisGroup = foregroundNullGroup
-			.append("g")
+		let axisGroup = foregroundNullGroup.append("g")
 			.attr("transform", `translate(0,${height - marginBottom})`)
 			.append("g")
 			.attr("transform", `translate(${xnull(0.5)}, 0)`)
 			.attr("class", "tick");
 
-		axisGroup.append("line").attr("stroke", "currentColor").attr("y2", 2.5);
+		axisGroup
+				.append("line")
+				.attr("stroke", "currentColor")
+				.attr("y2", 2.5);
 
 		axisGroup
 			.append("text")
@@ -205,8 +208,7 @@ export function CrossfilterHistogramPlot(
 	}
 
 	// Apply styles for all axis ticks
-	svg
-		.selectAll(".tick")
+	svg.selectAll(".tick")
 		.attr("font-family", "var(--sans-serif)")
 		.attr("font-weight", "normal");
 
