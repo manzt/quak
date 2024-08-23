@@ -88,8 +88,8 @@ export function CrossfilterHistogramPlot(
 
 	// Foreground bars for the current subset
 	let foregroundBarGroup = svg
-			.append("g")
-			.attr("fill", fillColor);
+		.append("g")
+		.attr("fill", fillColor);
 
 	// Min and max values labels
 	const axes = svg
@@ -137,8 +137,8 @@ export function CrossfilterHistogramPlot(
 			.attr("visibility", hovered.value ? "visible" : "hidden");
 
 		const hoveredTickText = hoveredTick
-				.select("text")
-				.node() as SVGTextElement;
+			.select("text")
+			.node() as SVGTextElement;
 		const bbox = hoveredTickText.getBBox();
 		const cond = (x(hovered.value ?? xmin) + bbox.width) > x(xmax);
 
@@ -163,7 +163,7 @@ export function CrossfilterHistogramPlot(
 	let foregroundNullGroup: typeof foregroundBarGroup | undefined = undefined;
 	if (nullCount > 0) {
 		let xnull = d3.scaleLinear()
-				.range([marginLeft, marginLeft + nullBinWidth]);
+			.range([marginLeft, marginLeft + nullBinWidth]);
 
 		// background bar for the null bin
 		svg.append("g")
@@ -191,9 +191,9 @@ export function CrossfilterHistogramPlot(
 			.attr("class", "tick");
 
 		axisGroup
-				.append("line")
-				.attr("stroke", "currentColor")
-				.attr("y2", 2.5);
+			.append("line")
+			.attr("stroke", "currentColor")
+			.attr("y2", 2.5);
 
 		axisGroup
 			.append("text")
