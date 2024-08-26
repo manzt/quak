@@ -1,53 +1,60 @@
 {
-	"lock": false,
-	"name": "quak",
-	"version": "0.0.0",
-	"exports": "./lib/mod.ts",
-	"tasks": {
-		"build": "deno run -A scripts/build.ts",
-		"dev": "deno run -A scripts/build.ts --watch",
-		"check": "deno check lib/widget.ts"
-	},
-	"compilerOptions": {
-		"verbatimModuleSyntax": true,
-		"allowJs": false,
-		"lib": [
-			"esnext",
-			"dom",
-			"dom.iterable"
-		]
-	},
-	"imports": {
-		"@anywidget/types": "https://esm.sh/@anywidget/types@0.1.9",
-		"@js-temporal/polyfill": "https://esm.sh/@js-temporal/polyfill@0.4.4",
-		"@lukeed/uuid": "https://esm.sh/@lukeed/uuid@2.0.1",
-		"@preact/signals-core": "https://esm.sh/@preact/signals-core@1.6.1",
-		"@uwdata/mosaic-core": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.10.0/+esm",
-		"@uwdata/mosaic-sql": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.10.0/+esm",
-		"@uwdata/mosaic-plot": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-plot@0.10.0/+esm",
-		"apache-arrow": "https://esm.sh/apache-arrow@16.1.0",
-		"htl": "https://esm.sh/htl@0.3.1",
-		"d3-selection": "https://esm.sh/d3-selection@3.0.0",
-		"d3-scale": "https://esm.sh/d3-scale@4.0.2",
-		"d3-axis": "https://esm.sh/d3-axis@3.0.0",
-		"d3-format": "https://esm.sh/d3-format@3.1.0",
-		"d3-time-format": "https://esm.sh/d3-time-format@4.1.0"
-	},
-	"fmt": {
-		"useTabs": true,
-		"exclude": [
-			".venv",
-			"src",
-			"examples",
-			"README.md",
-			"CONTRIBUTING.md",
-			"dist"
-		]
-	},
-	"lint": {
-		"rules": {
-			"exclude": ["prefer-const"]
-		},
-		"exclude": [".venv", "src", "examples", "dist"]
-	}
+  "lock": false,
+  "name": "@manzt/quak",
+  "version": "0.0.0",
+  "exports": "./lib/mod.ts",
+  "tasks": {
+    "build": "deno run -A scripts/build.ts",
+    "dev": "deno run -A scripts/build.ts --watch",
+    "check": "deno check lib/widget.ts"
+  },
+  "compilerOptions": {
+    "verbatimModuleSyntax": true,
+    "allowJs": false,
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable"
+    ]
+  },
+  "imports": {
+    "@anywidget/types": "https://esm.sh/@anywidget/types@0.1.9",
+    "@js-temporal/polyfill": "https://esm.sh/@js-temporal/polyfill@0.4.4",
+    "@lukeed/uuid": "https://esm.sh/@lukeed/uuid@2.0.1",
+    "@preact/signals-core": "https://esm.sh/@preact/signals-core@1.6.1",
+    "@uwdata/mosaic-core": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-core@0.10.0/+esm",
+    "@uwdata/mosaic-sql": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-sql@0.10.0/+esm",
+    "@uwdata/mosaic-plot": "https://cdn.jsdelivr.net/npm/@uwdata/mosaic-plot@0.10.0/+esm",
+    "apache-arrow": "https://esm.sh/apache-arrow@16.1.0",
+    "htl": "https://esm.sh/htl@0.3.1",
+    "d3-selection": "https://esm.sh/d3-selection@3.0.0",
+    "d3-scale": "https://esm.sh/d3-scale@4.0.2",
+    "d3-axis": "https://esm.sh/d3-axis@3.0.0",
+    "d3-format": "https://esm.sh/d3-format@3.1.0",
+    "d3-time-format": "https://esm.sh/d3-time-format@4.1.0"
+  },
+  "fmt": {
+    "useTabs": true,
+    "exclude": [
+      ".venv",
+      "src",
+      "examples",
+      "README.md",
+      "CONTRIBUTING.md",
+      "dist"
+    ]
+  },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "prefer-const"
+      ]
+    },
+    "exclude": [
+      ".venv",
+      "src",
+      "examples",
+      "dist"
+    ]
+  }
 }
