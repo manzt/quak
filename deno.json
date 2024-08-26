@@ -17,6 +17,9 @@
       "dom.iterable"
     ]
   },
+  "publish": {
+    "include": ["lib", "README.md"]
+  },
   "imports": {
     "@anywidget/types": "npm:@anywidget/types@0.1.9",
     "@js-temporal/polyfill": "npm:@js-temporal/polyfill@0.4.4",
