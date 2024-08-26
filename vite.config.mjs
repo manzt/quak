@@ -14,6 +14,7 @@
  * external urls using the importmap in `deno.json`.
  */
 import * as fs from "node:fs/promises";
+import { mapImports } from "./scripts/npm-specifier-to-cdn-url.mjs";
 
 let importmap = await fs
 	.readFile(new URL("deno.json", import.meta.url), { encoding: "utf-8" })
@@ -22,6 +23,9 @@ let importmap = await fs
 /** @type {import("npm:vite").UserConfig} */
 export default {
 	resolve: {
-		alias: { ...importmap.imports, "../deps/d3.ts": "https://esm.sh/d3@7" },
+		alias: {
+			...mapImports(importmap.imports),
+			"../deps/d3.ts": "https://esm.sh/d3@7",
+		},
 	},
 };

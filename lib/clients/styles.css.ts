@@ -1,3 +1,4 @@
+export default `\
 :host {
 	all: initial;
 	--sans-serif: -apple-system, BlinkMacSystemFont, "avenir next", avenir,
@@ -177,3 +178,4 @@ tr:first-child td {
 	font-size: 0.75rem;
 	font-variant-numeric: tabular-nums;
 }
+`;
