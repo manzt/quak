@@ -3,6 +3,7 @@
   "name": "@manzt/quak",
   "version": "0.0.0",
   "exports": "./lib/mod.ts",
+  "license": "MIT",
   "tasks": {
     "build": "deno run -A scripts/build.ts",
     "dev": "deno run -A scripts/build.ts --watch",
