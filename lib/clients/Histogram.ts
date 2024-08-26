@@ -7,7 +7,7 @@ import {
 	type Selection,
 } from "@uwdata/mosaic-core";
 // @deno-types="../deps/mosaic-sql.d.ts";
-import { count, Query, SQLExpression } from "@uwdata/mosaic-sql";
+import { count, Query, type SQLExpression } from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
 import type * as arrow from "apache-arrow";
 

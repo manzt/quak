@@ -5,7 +5,6 @@ import { Query } from "@uwdata/mosaic-sql";
 import * as arrow from "apache-arrow";
 import * as uuid from "@lukeed/uuid";
 import type * as aw from "@anywidget/types";
-import { effect } from "@preact/signals-core";
 
 import { DataTable } from "./clients/DataTable.ts";
 import { assert } from "./utils/assert.ts";
@@ -121,10 +120,10 @@ export default () => {
 				schema: schema,
 			});
 			coordinator.connect(table);
-			effect(() => {
-				model.set("sql", table.sql ?? "");
+			table.sql.subscribe((sql) => {
+				model.set("sql", sql ?? "");
 				model.save_changes();
-			});
+			})
 			el.appendChild(table.node());
 		},
 	};

@@ -3,7 +3,7 @@ import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 
 import { assert } from "./utils/assert.ts";
-import { DataTable, datatable } from "./clients/DataTable.ts";
+import { type DataTable, datatable } from "./clients/DataTable.ts";
 
 interface DuckDBClient {
 	registerFileText(name: string, text: string): Promise<void>;
@@ -137,7 +137,7 @@ async function main() {
 			let file = new URL(source).pathname.split("/").pop()!;
 			from = from.replace(`'${file}'`, `'${source}'`);
 		}
-		let sql = dt.sql?.replace(' FROM "df"', from);
+		let sql = dt.sql.value?.replace(' FROM "df"', from);
 		navigator.clipboard.writeText(sql!);
 		const icons = exportButton.querySelectorAll("svg")!;
 		icons[0].classList.add("hidden");

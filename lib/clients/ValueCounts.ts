@@ -6,7 +6,7 @@ import {
 	count,
 	Query,
 	sql,
-	SQLExpression,
+	type SQLExpression,
 	sum,
 } from "@uwdata/mosaic-sql";
 import type * as arrow from "apache-arrow";

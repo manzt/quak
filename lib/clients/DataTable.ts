@@ -1,14 +1,14 @@
 import * as arrow from "apache-arrow";
 // @deno-types="../deps/mosaic-core.d.ts"
 import {
-	Coordinator,
+	type Coordinator,
 	type FieldInfo,
 	type FieldRequest,
 	MosaicClient,
 	Selection,
 } from "@uwdata/mosaic-core";
 // @deno-types="../deps/mosaic-sql.d.ts"
-import { desc, Query, SQLExpression } from "@uwdata/mosaic-sql";
+import { desc, Query, type SQLExpression } from "@uwdata/mosaic-sql";
 import * as signals from "@preact/signals-core";
 import { html } from "htl";
 
@@ -19,7 +19,7 @@ import { Histogram } from "./Histogram.ts";
 import { ValueCounts } from "./ValueCounts.ts";
 import { signal } from "@preact/signals-core";
 
-import stylesString from "./styles.css?raw";
+import stylesString from "./styles.css.ts";
 import { StatusBar } from "./StatusBar.ts";
 
 interface DataTableOptions {
@@ -105,7 +105,9 @@ export class DataTable extends MosaicClient {
 			maxHeight = `${source.height}px`;
 		}
 
-		let tableRoot = html`<div class="table-container" style=${{ maxHeight }}>`;
+		let tableRoot = html`<div class="table-container" style=${{
+			maxHeight,
+		}}>`;
 		// @deno-fmt-ignore
 		tableRoot.appendChild(
 			html.fragment`<table style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
@@ -132,7 +134,7 @@ export class DataTable extends MosaicClient {
 	}
 
 	get sql() {
-		return this.#sql.value;
+		return this.#sql;
 	}
 
 	fields(): Array<FieldRequest> {
@@ -167,7 +169,9 @@ export class DataTable extends MosaicClient {
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
-					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
+					.map((o) =>
+						o.order === "asc" ? asc(o.field) : desc(o.field)
+					),
 			);
 		this.#sql.value = query.clone().toString();
 		return query
@@ -413,7 +417,9 @@ function thcol(
 	});
 
 	signals.effect(() => {
-		sortButton.style.visibility = buttonVisible.value ? "visible" : "hidden";
+		sortButton.style.visibility = buttonVisible.value
+			? "visible"
+			: "hidden";
 	});
 
 	signals.effect(() => {
