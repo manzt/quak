@@ -28,6 +28,7 @@
 /// <reference lib="deno.ns" />
 import * as esbuild from "npm:esbuild@0.20.2";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@^0.10.3";
+import { mapImports } from "./npm-specifier-to-cdn-url.mjs";
 
 let root = new URL("..", import.meta.url);
 
@@ -38,7 +39,7 @@ let denoJson = await Deno
 	.then(JSON.parse);
 
 let options: esbuild.BuildOptions = {
-	alias: denoJson.imports,
+	alias: mapImports(denoJson.imports),
 	entryPoints: ["./lib/widget.ts"],
 	outfile: "./src/quak/widget.js",
 	bundle: true,
