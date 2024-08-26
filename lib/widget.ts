@@ -123,7 +123,7 @@ export default () => {
 			table.sql.subscribe((sql) => {
 				model.set("sql", sql ?? "");
 				model.save_changes();
-			})
+			});
 			el.appendChild(table.node());
 		},
 	};

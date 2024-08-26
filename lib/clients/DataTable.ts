@@ -31,14 +31,23 @@ interface DataTableOptions {
 // TODO: more
 type ColumnSummaryClient = Histogram | ValueCounts;
 
+/**
+ * Create a DataTable client.
+ *
+ * @param table - The name of the table to query.
+ * @param options - Options for the DataTable client.
+ * @param options.coordinator - The mosaic coordinator to connect to.
+ * @param options.height - The height of the table in pixels (default: 11.5 rows).
+ * @param options.columns - The columns to display in the table (default: all columns).
+ */
 export async function datatable(
 	table: string,
 	options: {
-		coordinator?: Coordinator;
+		coordinator: Coordinator;
 		height?: number;
 		columns?: Array<string>;
-	} = {},
-) {
+	},
+): Promise<DataTable> {
 	assert(options.coordinator, "Must provide a coordinator");
 	let empty = await options.coordinator.query(
 		Query
@@ -133,10 +142,16 @@ export class DataTable extends MosaicClient {
 		return this.#shadowRoot.querySelector(".table-container")!;
 	}
 
-	get sql() {
+	/**
+	 * The SQL query string for the current state of the table.
+	 */
+	get sql(): signals.Signal<string | undefined> {
 		return this.#sql;
 	}
 
+	/**
+	 * Mosaic function. Client defines the fields to be requested from the coordinator.
+	 */
 	fields(): Array<FieldRequest> {
 		return this.#columns.map((column) => ({
 			table: this.#meta.table,
@@ -145,11 +160,11 @@ export class DataTable extends MosaicClient {
 		}));
 	}
 
-	node() {
+	node(): HTMLElement {
 		return this.#root;
 	}
 
-	resize(height: number) {
+	resize(height: number): void {
 		this.#rows = Math.floor(height / this.#rowHeight);
 		this.#tableRoot.style.maxHeight = `${height}px`;
 		this.#tableRoot.scrollTop = 0;
@@ -160,18 +175,19 @@ export class DataTable extends MosaicClient {
 	}
 
 	/**
-	 * @param {Array<unknown>} filter
+	 * Mosaic function. Client defines the query to be executed by the coordinator.
+	 *
+	 * @param filter - The filter predicates to apply to the query
+	 * @returns The query to be executed
 	 */
-	query(filter: Array<unknown> = []) {
+	query(filter: Array<unknown> = []): Query {
 		let query = Query.from(this.#meta.table)
 			.select(this.#columns)
 			.where(filter)
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
-					.map((o) =>
-						o.order === "asc" ? asc(o.field) : desc(o.field)
-					),
+					.map((o) => o.order === "asc" ? asc(o.field) : desc(o.field)),
 			);
 		this.#sql.value = query.clone().toString();
 		return query
@@ -180,15 +196,15 @@ export class DataTable extends MosaicClient {
 	}
 
 	/**
-	 * A mosiac lifecycle function that is called with the results from `query`.
+	 * A Mosiac lifecycle function called with arrow results from `query`.
 	 * Must be synchronous, and return `this`.
 	 */
-	queryResult(table: arrow.Table) {
+	queryResult(table: arrow.Table): this {
 		if (!this.#pendingInternalRequest) {
 			// data is not from an internal request, so reset table
 			this.#reader = new AsyncBatchReader(() => {
 				this.#pendingInternalRequest = true;
-				this.requestData(this.#offset + this.#limit);
+				this.#requestData(this.#offset + this.#limit);
 			});
 			this.#tbody.replaceChildren();
 			this.#tableRoot.scrollTop = 0;
@@ -201,7 +217,10 @@ export class DataTable extends MosaicClient {
 		return this;
 	}
 
-	update() {
+	/**
+	 * Mosaic lifecycle function called after `queryResult`
+	 */
+	update(): this {
 		if (!this.#pendingInternalRequest) {
 			// on the first update, populate the table with initial data
 			this.#appendRows(this.#rows * 2);
@@ -210,7 +229,7 @@ export class DataTable extends MosaicClient {
 		return this;
 	}
 
-	requestData(offset = 0) {
+	#requestData(offset = 0) {
 		this.#offset = offset;
 
 		// request next data batch
@@ -221,7 +240,10 @@ export class DataTable extends MosaicClient {
 		this.coordinator.prefetch(query.clone().offset(offset + this.#limit));
 	}
 
-	fieldInfo(infos: Array<FieldInfo>) {
+	/**
+	 * Mosaic lifecycle function called when the client is connected to a coordinator.
+	 */
+	fieldInfo(infos: Array<FieldInfo>): this {
 		let classes = classof(this.#meta.schema);
 
 		{
@@ -285,7 +307,7 @@ export class DataTable extends MosaicClient {
 				field: this.#columns[i],
 				order: col.sortState.value,
 			}));
-			this.requestData();
+			this.#requestData();
 		});
 
 		// @deno-fmt-ignore
@@ -417,9 +439,7 @@ function thcol(
 	});
 
 	signals.effect(() => {
-		sortButton.style.visibility = buttonVisible.value
-			? "visible"
-			: "hidden";
+		sortButton.style.visibility = buttonVisible.value ? "visible" : "hidden";
 	});
 
 	signals.effect(() => {
