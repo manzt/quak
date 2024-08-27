@@ -1,8 +1,8 @@
 """A Hatchling plugin to build the quak frontend."""
 
+import os
 import pathlib
 import subprocess
-import os
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
