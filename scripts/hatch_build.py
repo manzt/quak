@@ -1,5 +1,6 @@
 """A Hatchling plugin to build the quak frontend."""
 
+import os
 import pathlib
 import subprocess
 
@@ -15,5 +16,10 @@ class QuakBuildHook(BuildHookInterface):
 
     def initialize(self, version: str, build_data: dict) -> None:
         """Initialize the plugin."""
+        if os.getenv("SKIP_DENO_BUILD", "0") == "1":
+            # Skip the build if the environment variable is set
+            # Useful in CI/CD pipelines
+            return
+
         if not (ROOT / "src/quak/widget.js").exists():
             subprocess.check_call(["deno", "task", "build"], cwd=ROOT)

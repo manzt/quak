@@ -19,12 +19,13 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - uses: eifinger/setup-rye@v3
-        with:
-          version: 'latest'
       - run: |
-          rye fmt --check
-          rye lint
+          curl -LsSf https://astral.sh/uv/0.3.4/install.sh | sh
+      - run: |
+          uv run ruff format --check
+          uv run ruff check
+        env:
+          SKIP_DENO_BUILD: 1
 
   LintJavaScript:
     name: JavaScript / Lint
