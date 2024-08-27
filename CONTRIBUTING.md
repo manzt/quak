@@ -4,21 +4,20 @@
 
 **quak** is a monorepo, meaning the repo holds multiple packages. Since the
 project contains both JavaScript and Python components, **quak** requires both
-`rye` (for Python) and `deno` (for TypeScript).
+`uv` (for Python) and `deno` (for TypeScript).
 
 If you want to develop in the notebooks (`./examples/`), you will need to run
-both `deno` (to (re)build the TypeScript) and `rye` (to start the Jupyter
+both `deno` (to (re)build the TypeScript) and `uv` (to start the Jupyter
 notebook):
 
 ```sh
 deno task dev
 ```
 
-and then start the Python notebook server with `rye`:
+and then start the Python notebook server with `uv`:
 
 ```sh
-rye sync
-rye run jupyter lab
+uv run --with jupyterlab --with polars --with vega-datasets jupyter lab
 ```
 
 Alternatively, you can just work on the TypeScript side of things by running:
@@ -39,8 +38,8 @@ deno fmt
 deno task check
 
 # python
-rye lint
-rye format
+uv run ruff check --fix
+uv run ruff format
 ```
 
 > [!NOTE]
