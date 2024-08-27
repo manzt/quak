@@ -17,7 +17,7 @@ deno task dev
 and then start the Python notebook server with `uv`:
 
 ```sh
-uv run --with jupyterlab --with polars --with vega-datasets jupyter lab
+uv run jupyter lab
 ```
 
 Alternatively, you can just work on the TypeScript side of things by running:

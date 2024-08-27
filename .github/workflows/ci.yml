@@ -22,8 +22,8 @@ jobs:
       - run: |
           curl -LsSf https://astral.sh/uv/0.3.4/install.sh | sh
       - run: |
-          uv run ruff format --check
-          uv run ruff check
+          uvx ruff format --check
+          uvx run ruff check
 
   LintJavaScript:
     name: JavaScript / Lint
