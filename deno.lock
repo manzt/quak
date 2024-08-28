@@ -1,7 +1,7 @@
 {
   "version": "4",
   "specifiers": {
-    "npm:@anywidget/types@~0.1.9": "npm:@anywidget/types@0.1.9",
+    "npm:@anywidget/types": "npm:@anywidget/types@0.1.9",
     "npm:@js-temporal/polyfill@~0.4.4": "npm:@js-temporal/polyfill@0.4.4",
     "npm:@lukeed/uuid@^2.0.1": "npm:@lukeed/uuid@2.0.1",
     "npm:@preact/signals-core@^1.8.0": "npm:@preact/signals-core@1.8.0",
@@ -1092,7 +1092,6 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:@anywidget/types@~0.1.9",
       "npm:@js-temporal/polyfill@~0.4.4",
       "npm:@lukeed/uuid@^2.0.1",
       "npm:@preact/signals-core@^1.8.0",
