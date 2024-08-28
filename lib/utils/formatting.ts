@@ -1,6 +1,6 @@
 import { Temporal } from "@js-temporal/polyfill";
 import * as arrow from "apache-arrow";
-import { format } from "d3-format";
+import { format } from "d3";
 
 /**
  * A utility function to create a formatter for a given data type.
