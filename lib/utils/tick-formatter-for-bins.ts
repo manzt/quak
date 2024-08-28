@@ -1,4 +1,5 @@
-import * as d3 from "../deps/d3.ts";
+// @ts-types="npm:@types/d3"
+import * as d3 from "d3";
 import type { Bin } from "../types.ts";
 
 let YEAR = "year";

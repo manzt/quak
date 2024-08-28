@@ -4,7 +4,6 @@ import * as mc from "@uwdata/mosaic-core";
 import { Query } from "@uwdata/mosaic-sql";
 import * as arrow from "apache-arrow";
 import * as uuid from "@lukeed/uuid";
-import type * as aw from "@anywidget/types";
 
 import { DataTable } from "./clients/DataTable.ts";
 import { assert } from "./utils/assert.ts";
@@ -29,7 +28,9 @@ export default () => {
 	let schema: arrow.Schema;
 
 	return {
-		async initialize({ model }: aw.InitializeProps<Model>) {
+		async initialize(
+			{ model }: import("npm:@anywidget/types").InitializeProps<Model>,
+		) {
 			let logger = coordinator.logger(_voidLogger());
 			let openQueries = new Map<string, OpenQuery>();
 
@@ -114,7 +115,7 @@ export default () => {
 				coordinator.clear();
 			};
 		},
-		render({ model, el }: aw.RenderProps<Model>) {
+		render({ model, el }: import("npm:@anywidget/types").RenderProps<Model>) {
 			let table = new DataTable({
 				table: model.get("_table_name"),
 				schema: schema,
