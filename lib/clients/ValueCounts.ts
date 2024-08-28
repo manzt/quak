@@ -1,6 +1,6 @@
-// @deno-types="../deps/mosaic-core.d.ts";
+// @ts-types="../deps/mosaic-core.d.ts";
 import { clausePoint, MosaicClient, type Selection } from "@uwdata/mosaic-core";
-// @deno-types="../deps/mosaic-sql.d.ts";
+// @ts-types="../deps/mosaic-sql.d.ts";
 import {
 	column,
 	count,
