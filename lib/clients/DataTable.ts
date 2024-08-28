@@ -1,5 +1,5 @@
 import * as arrow from "apache-arrow";
-// @deno-types="../deps/mosaic-core.d.ts"
+// @ts-types="../deps/mosaic-core.d.ts"
 import {
 	type Coordinator,
 	type FieldInfo,
@@ -7,7 +7,7 @@ import {
 	MosaicClient,
 	Selection,
 } from "@uwdata/mosaic-core";
-// @deno-types="../deps/mosaic-sql.d.ts"
+// @ts-types="../deps/mosaic-sql.d.ts"
 import { desc, Query, type SQLExpression } from "@uwdata/mosaic-sql";
 import * as signals from "@preact/signals-core";
 import { html } from "htl";

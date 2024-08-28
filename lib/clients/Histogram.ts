@@ -1,4 +1,4 @@
-// @deno-types="../deps/mosaic-core.d.ts";
+// @ts-types="../deps/mosaic-core.d.ts";
 import {
 	type ColumnField,
 	type FieldInfo,
@@ -6,7 +6,7 @@ import {
 	MosaicClient,
 	type Selection,
 } from "@uwdata/mosaic-core";
-// @deno-types="../deps/mosaic-sql.d.ts";
+// @ts-types="../deps/mosaic-sql.d.ts";
 import { count, Query, type SQLExpression } from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
 import type * as arrow from "apache-arrow";

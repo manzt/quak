@@ -1,11 +1,11 @@
 import type * as arrow from "apache-arrow";
-// @deno-types="../deps/mosaic-core.d.ts"
+// @ts-types="../deps/mosaic-core.d.ts"
 import {
 	type Interactor,
 	MosaicClient,
 	type Selection,
 } from "@uwdata/mosaic-core";
-// @deno-types="../deps/mosaic-sql.d.ts"
+// @ts-types="../deps/mosaic-sql.d.ts"
 import { count, Query } from "@uwdata/mosaic-sql";
 
 interface StatusBarOptions {

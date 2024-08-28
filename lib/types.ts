@@ -1,4 +1,4 @@
-// @deno-types="./deps/mosaic-core.d.ts";
+// @ts-types="./deps/mosaic-core.d.ts";
 import type { FieldInfo } from "@uwdata/mosaic-core";
 
 export interface Bin {

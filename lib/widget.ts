@@ -1,6 +1,6 @@
-// @deno-types="./deps/mosaic-core.d.ts";
+// @ts-types="./deps/mosaic-core.d.ts";
 import * as mc from "@uwdata/mosaic-core";
-// @deno-types="./deps/mosaic-sql.d.ts";
+// @ts-types="./deps/mosaic-sql.d.ts";
 import { Query } from "@uwdata/mosaic-sql";
 import * as arrow from "apache-arrow";
 import * as uuid from "@lukeed/uuid";

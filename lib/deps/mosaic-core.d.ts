@@ -1,4 +1,4 @@
-// @deno-types="./mosaic-sql.d.ts";
+// @ts-types="./mosaic-sql.d.ts";
 import type { Query, SQLExpression } from "@uwdata/mosaic-sql";
 import type * as arrow from "apache-arrow";
 
