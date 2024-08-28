@@ -4,6 +4,8 @@ import * as d3 from "d3";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
 import type { Bin, Scale } from "../types.ts";
+import type * as arrow from "apache-arrow";
+import { formatDataType, percentFormatter } from "./formatting.ts";
 
 interface HistogramOptions {
 	type: "number" | "date";
@@ -27,6 +29,7 @@ interface HistogramOptions {
  */
 export function CrossfilterHistogramPlot(
 	bins: Array<Bin>,
+	field: arrow.Field,
 	{
 		type = "number",
 		width = 125,
@@ -44,7 +47,10 @@ export function CrossfilterHistogramPlot(
 	scale: (type: string) => Scale<number, number>;
 	update(bins: Array<Bin>, opts: { nullCount: number }): void;
 } {
+	const fieldType = formatDataType(field.type);
+	const total = bins.reduce((sum, bin) => sum + bin.length, 0);
 	let hovered = signal<number | Date | undefined>(undefined);
+	let countLabel = signal<string>(fieldType);
 	let nullBinWidth = nullCount === 0 ? 0 : 5;
 	let spacing = nullBinWidth ? 4 : 0;
 	let extent = /** @type {const} */ ([
@@ -148,6 +154,13 @@ export function CrossfilterHistogramPlot(
 			)
 			.attr("width", bbox.width + 5)
 			.attr("height", bbox.height + 5);
+
+		const labelElement = svg
+			.node()
+			?.parentElement?.parentElement?.querySelector(".gray");
+		if (labelElement) {
+			labelElement.textContent = countLabel.value;
+		}
 	});
 
 	/** @type {typeof foregroundBarGroup | undefined} */
@@ -215,7 +228,8 @@ export function CrossfilterHistogramPlot(
 			.attr("x", (d) => x(d.x0) + 1.5)
 			.attr("width", (d) => x(d.x1) - x(d.x0) - 1.5)
 			.attr("y", (d) => y(d.length))
-			.attr("height", (d) => y(0) - y(d.length));
+			.attr("height", (d) => y(0) - y(d.length))
+			.attr("opacity", 1);
 		foregroundNullGroup
 			?.select("rect")
 			.attr("y", y(nullCount))
@@ -237,10 +251,64 @@ export function CrossfilterHistogramPlot(
 	let node = svg.node();
 	assert(node, "Infallable");
 
+	// Function to find the closest rect to a given x-coordinate
+	function findClosestRect(x: number): SVGRectElement | null {
+		let closestRect: SVGRectElement | null = null;
+		let minDistance = Infinity;
+
+		foregroundBarGroup.selectAll("rect").each(function () {
+			const rect = d3.select(this);
+			const rectX = parseFloat(rect.attr("x"));
+			const rectWidth = parseFloat(rect.attr("width"));
+			const rectCenter = rectX + rectWidth / 2;
+			const distance = Math.abs(x - rectCenter);
+
+			if (distance < minDistance) {
+				minDistance = distance;
+				closestRect = this as SVGRectElement;
+			}
+		});
+
+		return closestRect;
+	}
+
+	axes.on("mousemove", (event) => {
+		const relativeX = event.clientX - node.getBoundingClientRect().left;
+		const hoveredX = x.invert(relativeX);
+		hovered.value = clamp(hoveredX, xmin, xmax);
+
+		const closestRect = findClosestRect(relativeX);
+
+		foregroundBarGroup.selectAll("rect").attr("opacity", function () {
+			return this === closestRect ? 1 : 0.3;
+		});
+
+		const hoveredValue = hovered.value;
+
+		const hoveredBin = hoveredValue !== undefined
+			? bins.find((bin) => hoveredValue >= bin.x0 && hoveredValue < bin.x1)
+			: undefined;
+		const hoveredValueCount = hoveredBin?.length;
+
+		countLabel.value =
+			hoveredValue !== undefined && hoveredValueCount !== undefined
+				? `${hoveredValueCount} row${hoveredValueCount === 1 ? "" : "s"} (${
+					percentFormatter(hoveredValueCount / total)
+				})`
+				: fieldType;
+	});
+
 	node.addEventListener("mousemove", (event) => {
 		const relativeX = event.clientX - node.getBoundingClientRect().left;
 		hovered.value = clamp(x.invert(relativeX), xmin, xmax);
 	});
+
+	axes.on("mouseleave", () => {
+		hovered.value = undefined;
+		foregroundBarGroup.selectAll("rect").attr("opacity", 1);
+		countLabel.value = fieldType;
+	});
+
 	node.addEventListener("mouseleave", () => {
 		hovered.value = undefined;
 	});
