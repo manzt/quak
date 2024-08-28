@@ -1,6 +1,7 @@
 import { effect, signal } from "@preact/signals-core";
 import type * as arrow from "apache-arrow";
-import * as d3 from "../deps/d3.ts";
+// @ts-types="npm:@types/d3"
+import * as d3 from "d3";
 import { assert } from "./assert.ts";
 import { formatDataType } from "./formatting.ts";
 

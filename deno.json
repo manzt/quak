@@ -1,5 +1,4 @@
 {
-	"lock": false,
 	"name": "@manzt/quak",
 	"version": "0.0.0",
 	"exports": "./lib/mod.ts",
@@ -30,11 +29,7 @@
 		"@uwdata/mosaic-plot": "npm:@uwdata/mosaic-plot@~0.10.0",
 		"@uwdata/mosaic-sql": "npm:@uwdata/mosaic-sql@~0.10.0",
 		"apache-arrow": "npm:apache-arrow@^17.0.0",
-		"d3-axis": "npm:d3-axis@^3.0.0",
-		"d3-format": "npm:d3-format@^3.1.0",
-		"d3-scale": "npm:d3-scale@^4.0.2",
-		"d3-selection": "npm:d3-selection@^3.0.0",
-		"d3-time-format": "npm:d3-time-format@^4.1.0",
+		"d3": "npm:d3@^7.9.0",
 		"htl": "npm:htl@~0.3.1"
 	},
 	"fmt": {

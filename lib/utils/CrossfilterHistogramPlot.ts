@@ -1,5 +1,6 @@
 import { effect, signal } from "@preact/signals-core";
-import * as d3 from "../deps/d3.ts";
+// @ts-types="npm:@types/d3"
+import * as d3 from "d3";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
 import type { Bin, Scale } from "../types.ts";
@@ -141,7 +142,10 @@ export function CrossfilterHistogramPlot(
 
 		hoverLabelBackground
 			.attr("visibility", hovered.value ? "visible" : "hidden")
-			.attr("transform", `translate(${(cond ? -bbox.width : 0) - 2.5}, 2.5)`)
+			.attr(
+				"transform",
+				`translate(${(cond ? -bbox.width : 0) - 2.5}, 2.5)`,
+			)
 			.attr("width", bbox.width + 5)
 			.attr("height", bbox.height + 5);
 	});

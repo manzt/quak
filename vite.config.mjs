@@ -23,9 +23,6 @@ let importmap = await fs
 /** @type {import("npm:vite").UserConfig} */
 export default {
 	resolve: {
-		alias: {
-			...mapImports(importmap.imports),
-			"../deps/d3.ts": "https://esm.sh/d3@7",
-		},
+		alias: mapImports(importmap.imports),
 	},
 };
