@@ -29,7 +29,7 @@ export default () => {
 
 	return {
 		async initialize(
-			{ model }: import("npm:@anywidget/types").InitializeProps<Model>,
+			{ model }: import("npm:@anywidget/types@0.2.0").InitializeProps<Model>,
 		) {
 			let logger = coordinator.logger(_voidLogger());
 			let openQueries = new Map<string, OpenQuery>();
@@ -115,7 +115,7 @@ export default () => {
 				coordinator.clear();
 			};
 		},
-		render({ model, el }: import("npm:@anywidget/types").RenderProps<Model>) {
+		render({ model, el }: import("npm:@anywidget/types@0.2.0").RenderProps<Model>) {
 			let table = new DataTable({
 				table: model.get("_table_name"),
 				schema: schema,

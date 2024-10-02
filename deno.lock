@@ -3,15 +3,17 @@
   "packages": {
     "specifiers": {
       "npm:@anywidget/types": "npm:@anywidget/types@0.1.9",
+      "npm:@anywidget/types@0.2.0": "npm:@anywidget/types@0.2.0",
       "npm:@js-temporal/polyfill@~0.4.4": "npm:@js-temporal/polyfill@0.4.4",
       "npm:@lukeed/uuid@^2.0.1": "npm:@lukeed/uuid@2.0.1",
       "npm:@preact/signals-core@^1.8.0": "npm:@preact/signals-core@1.8.0",
       "npm:@types/d3": "npm:@types/d3@7.4.3",
       "npm:@types/d3-scale@4.0.8": "npm:@types/d3-scale@4.0.8",
-      "npm:@uwdata/mosaic-core@~0.10.0": "npm:@uwdata/mosaic-core@0.10.0",
-      "npm:@uwdata/mosaic-plot@~0.10.0": "npm:@uwdata/mosaic-plot@0.10.0",
-      "npm:@uwdata/mosaic-sql@~0.10.0": "npm:@uwdata/mosaic-sql@0.10.0",
+      "npm:@uwdata/mosaic-core@~0.11.0": "npm:@uwdata/mosaic-core@0.11.0",
+      "npm:@uwdata/mosaic-plot@~0.11.0": "npm:@uwdata/mosaic-plot@0.11.0",
+      "npm:@uwdata/mosaic-sql@~0.11.0": "npm:@uwdata/mosaic-sql@0.11.0",
       "npm:apache-arrow@^17.0.0": "npm:apache-arrow@17.0.0",
+      "npm:d3@^7.9.0": "npm:d3@7.9.0_d3-selection@3.0.0",
       "npm:htl@~0.3.1": "npm:htl@0.3.1"
     },
     "npm": {
@@ -27,6 +29,10 @@
         "dependencies": {
           "@jupyter-widgets/base": "@jupyter-widgets/base@6.0.10"
         }
+      },
+      "@anywidget/types@0.2.0": {
+        "integrity": "sha512-+XtK4uwxRd4JpuevUMhirrbvC0V4yCA/i0lEjhmSAtOaxiXIg/vBKzaSonDuoZ1a9LEjUXTW2+m7w+ULgsJYvg==",
+        "dependencies": {}
       },
       "@duckdb/duckdb-wasm@1.28.1-dev99.0": {
         "integrity": "sha512-EgIRjUFAos4oT4QeFLK6g7IDPWFWu8dP/mj2/b0pyiN5dDL+xxKW2KyLbeAs26L6Y6yeYy0O4OJSezFOqTbOmg==",
@@ -515,26 +521,30 @@
         "integrity": "sha512-HP38xE+GuWGlbSRq9WrZkousaQ7dragtZCruBVMi0oX1migFZavZ3OROKHSkNp/9ouq82zrWtZpg18jFnVN96g==",
         "dependencies": {}
       },
-      "@uwdata/mosaic-core@0.10.0": {
-        "integrity": "sha512-0/KpAlzh6TrnwBn6kNtUV5VMB9ktswO9eCWjLVnzr21KREPN/RAUYUi03ZPvdNtHzJchKc3EVCAx5hGFDqdsKQ==",
+      "@uwdata/flechette@1.1.0": {
+        "integrity": "sha512-UG25ytXRsElGDSIsvCuEUUkX/XImdKe7jnZF2Y5Q9uYYQH6WO60F7yLJ/sNRBJqHdn4A0QhTAOuOJevDZZcF8Q==",
+        "dependencies": {}
+      },
+      "@uwdata/mosaic-core@0.11.0": {
+        "integrity": "sha512-0bW7zl90EXqZoUfIJCrytjeY5KNjZWoYN1of1M0fJ0A+7cxlh08iLTi9XRaptPmL6teIOpOthVV747422BYVcQ==",
         "dependencies": {
           "@duckdb/duckdb-wasm": "@duckdb/duckdb-wasm@1.28.1-dev99.0",
-          "@uwdata/mosaic-sql": "@uwdata/mosaic-sql@0.10.0",
-          "apache-arrow": "apache-arrow@16.1.0"
+          "@uwdata/flechette": "@uwdata/flechette@1.1.0",
+          "@uwdata/mosaic-sql": "@uwdata/mosaic-sql@0.11.0"
         }
       },
-      "@uwdata/mosaic-plot@0.10.0": {
-        "integrity": "sha512-QuQkZrYlKM1Cwr6UeRjQlxgXyLV5SMahHdbobnauyV5tU4Bv5lJa6t0LMN1tVp+f04UZPdPimVwL9Wky+jrPIQ==",
+      "@uwdata/mosaic-plot@0.11.0": {
+        "integrity": "sha512-WcIvrHqg5brlT8SPV3qFNsjaRI14govLsMrrmjTRA/uofb6kRmvFiNbNn/9+7VRReGzeB0wMiX2bvAriRAdIzA==",
         "dependencies": {
           "@observablehq/plot": "@observablehq/plot@0.6.16",
-          "@uwdata/mosaic-core": "@uwdata/mosaic-core@0.10.0",
-          "@uwdata/mosaic-sql": "@uwdata/mosaic-sql@0.10.0",
+          "@uwdata/mosaic-core": "@uwdata/mosaic-core@0.11.0",
+          "@uwdata/mosaic-sql": "@uwdata/mosaic-sql@0.11.0",
           "d3": "d3@7.9.0_d3-selection@3.0.0",
           "isoformat": "isoformat@0.2.1"
         }
       },
-      "@uwdata/mosaic-sql@0.10.0": {
-        "integrity": "sha512-tPsgrHO8zTwLFMBR+BiG4fskK9RSbH+nXS9ju8433NDq3qicAq4Z46CnYpCs0vWIR7AUAxMvncqP6YPbiQhOug==",
+      "@uwdata/mosaic-sql@0.11.0": {
+        "integrity": "sha512-q2uDGxsfhhXkJYo1CXyo0RdyWsYUsHrwe+9FORfyGuxfU4+0KxhFRQn5njQm4hEejQhGoqvPbvcQxR9g6PnS+w==",
         "dependencies": {}
       },
       "ajv@8.17.1": {
@@ -564,20 +574,6 @@
           "flatbuffers": "flatbuffers@23.5.26",
           "json-bignum": "json-bignum@0.0.3",
           "pad-left": "pad-left@2.1.0",
-          "tslib": "tslib@2.7.0"
-        }
-      },
-      "apache-arrow@16.1.0": {
-        "integrity": "sha512-G6GiM6tzPDdGnKUnVkvVr1Nt5+hUaCMBISiasMSiJwI5L5GKDv5Du7Avc2kxlFfB/LEK2LTqh2GKSxutMdf8vQ==",
-        "dependencies": {
-          "@swc/helpers": "@swc/helpers@0.5.12",
-          "@types/command-line-args": "@types/command-line-args@5.2.3",
-          "@types/command-line-usage": "@types/command-line-usage@5.0.4",
-          "@types/node": "@types/node@20.16.2",
-          "command-line-args": "command-line-args@5.2.1",
-          "command-line-usage": "command-line-usage@7.0.3",
-          "flatbuffers": "flatbuffers@24.3.25",
-          "json-bignum": "json-bignum@0.0.3",
           "tslib": "tslib@2.7.0"
         }
       },
@@ -1186,9 +1182,9 @@
       "npm:@js-temporal/polyfill@~0.4.4",
       "npm:@lukeed/uuid@^2.0.1",
       "npm:@preact/signals-core@^1.8.0",
-      "npm:@uwdata/mosaic-core@~0.10.0",
-      "npm:@uwdata/mosaic-plot@~0.10.0",
-      "npm:@uwdata/mosaic-sql@~0.10.0",
+      "npm:@uwdata/mosaic-core@~0.11.0",
+      "npm:@uwdata/mosaic-plot@~0.11.0",
+      "npm:@uwdata/mosaic-sql@~0.11.0",
       "npm:apache-arrow@^17.0.0",
       "npm:d3@^7.9.0",
       "npm:htl@~0.3.1"
