@@ -1,4 +1,4 @@
-import * as arrow from "apache-arrow";
+import * as flech from "@uwdata/flechette";
 // @ts-types="../deps/mosaic-core.d.ts"
 import {
 	type Coordinator,
@@ -24,12 +24,13 @@ import { StatusBar } from "./StatusBar.ts";
 
 interface DataTableOptions {
 	table: string;
-	schema: arrow.Schema;
+	schema: flech.Schema;
 	height?: number;
 }
 
 // TODO: more
 type ColumnSummaryClient = Histogram | ValueCounts;
+type TableRow = Record<string, unknown>;
 
 /**
  * Create a DataTable client.
@@ -67,7 +68,7 @@ export async function datatable(
 
 export class DataTable extends MosaicClient {
 	/** source of the data */
-	#meta: { table: string; schema: arrow.Schema };
+	#meta: { table: string; schema: flech.Schema };
 	/** for the component */
 	#root: HTMLElement = document.createElement("div");
 	/** shadow root for the component */
@@ -97,8 +98,8 @@ export class DataTable extends MosaicClient {
 	/** the formatter for the data table entries */
 	#format: Record<string, (value: unknown) => string>;
 
-	/** @type {AsyncBatchReader<arrow.StructRowProxy> | null} */
-	#reader: AsyncBatchReader<arrow.StructRowProxy> | null = null;
+	/** @type {AsyncBatchReader<flech.StructRowProxy> | null} */
+	#reader: AsyncBatchReader<TableRow> | null = null;
 
 	#sql = signal(undefined as string | undefined);
 
@@ -199,7 +200,7 @@ export class DataTable extends MosaicClient {
 	 * A Mosiac lifecycle function called with arrow results from `query`.
 	 * Must be synchronous, and return `this`.
 	 */
-	queryResult(table: arrow.Table): this {
+	queryResult(table: flech.Table): this {
 		if (!this.#pendingInternalRequest) {
 			// data is not from an internal request, so reset table
 			this.#reader = new AsyncBatchReader(() => {
@@ -362,7 +363,7 @@ export class DataTable extends MosaicClient {
 		}
 	}
 
-	#appendRow(d: arrow.StructRowProxy, i: number) {
+	#appendRow(d: TableRow, i: number) {
 		let itr = this.#templateRow?.cloneNode(true);
 		assert(itr, "Must have a data row");
 		let td = itr.childNodes[0] as HTMLTableCellElement;
@@ -389,7 +390,7 @@ const TRUNCATE = /** @type {const} */ ({
 });
 
 function thcol(
-	field: arrow.Field,
+	field: flech.Field,
 	minWidth: number,
 	vis?: ColumnSummaryClient,
 ) {
@@ -502,7 +503,7 @@ function thcol(
 /**
  * Return a formatter for each field in the schema
  */
-function formatof(schema: arrow.Schema) {
+function formatof(schema: flech.Schema) {
 	const format: Record<string, (value: unknown) => string> = Object.create(
 		null,
 	);
@@ -515,20 +516,20 @@ function formatof(schema: arrow.Schema) {
 /**
  * Return a class type of each field in the schema.
  */
-function classof(schema: arrow.Schema): Record<string, "number" | "date"> {
+function classof(schema: flech.Schema): Record<string, "number" | "date"> {
 	const classes: Record<string, "number" | "date"> = Object.create(null);
 	for (const field of schema.fields) {
-		if (
-			arrow.DataType.isInt(field.type) ||
-			arrow.DataType.isFloat(field.type)
-		) {
-			classes[field.name] = "number";
-		}
-		if (
-			arrow.DataType.isDate(field.type) ||
-			arrow.DataType.isTimestamp(field.type)
-		) {
-			classes[field.name] = "date";
+		switch (field.type.typeId) {
+			case flech.Type.Int:
+			case flech.Type.Float:
+				classes[field.name] = "number";
+				break;
+			case flech.Type.Date:
+			case flech.Type.Timestamp:
+				classes[field.name] = "date";
+				break;
+			default:
+				break;
 		}
 	}
 	return classes;

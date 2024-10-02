@@ -9,7 +9,7 @@ import {
 	type SQLExpression,
 	sum,
 } from "@uwdata/mosaic-sql";
-import type * as arrow from "apache-arrow";
+import type * as flech from "@uwdata/flechette";
 import { effect } from "@preact/signals-core";
 
 import { ValueCountsPlot } from "../utils/ValueCountsPlot.ts";
@@ -19,17 +19,17 @@ interface UniqueValuesOptions {
 	/** The table to query. */
 	table: string;
 	/** An arrow Field containing the column info to use for the histogram. */
-	field: arrow.Field;
+	field: flech.Field;
 	/** A mosaic selection to filter the data. */
 	filterBy: Selection;
 }
 
-type CountTable = arrow.Table<{ key: arrow.Utf8; total: arrow.Int }>;
+type CountTable = flech.Table;
 
 export class ValueCounts extends MosaicClient {
 	#table: string;
 	#column: string;
-	#field: arrow.Field;
+	#field: flech.Field;
 	#el: HTMLElement = document.createElement("div");
 	#plot: ReturnType<typeof ValueCountsPlot> | undefined;
 

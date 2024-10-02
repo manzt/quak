@@ -24,10 +24,10 @@
 		"@js-temporal/polyfill": "npm:@js-temporal/polyfill@~0.4.4",
 		"@lukeed/uuid": "npm:@lukeed/uuid@^2.0.1",
 		"@preact/signals-core": "npm:@preact/signals-core@^1.8.0",
+		"@uwdata/flechette": "npm:@uwdata/flechette@^1.1.0",
 		"@uwdata/mosaic-core": "npm:@uwdata/mosaic-core@~0.11.0",
 		"@uwdata/mosaic-plot": "npm:@uwdata/mosaic-plot@~0.11.0",
 		"@uwdata/mosaic-sql": "npm:@uwdata/mosaic-sql@~0.11.0",
-		"apache-arrow": "npm:apache-arrow@^17.0.0",
 		"d3": "npm:d3@^7.9.0",
 		"htl": "npm:htl@~0.3.1"
 	},
