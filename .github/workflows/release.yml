@@ -18,15 +18,15 @@ jobs:
       - uses: denoland/setup-deno@v1
         with:
           deno-version: v1.x
-      - uses: eifinger/setup-rye@v3
+      - uses: astral-sh/setup-uv@v3
         with:
-          version: latest
+          version: "0.4.18"
 
-      - run: rye build
+      - run: uv build
 
       - name: Publish distribution 📦 to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
-      - run: deno run -A 'npm:changelogithub@0.13'
+      - run: npx changelogithub@0.13
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
