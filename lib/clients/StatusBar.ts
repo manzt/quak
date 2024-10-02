@@ -1,4 +1,4 @@
-import type * as arrow from "apache-arrow";
+import * as flech from "@uwdata/flechette";
 // @ts-types="../deps/mosaic-core.d.ts"
 import {
 	type Interactor,
@@ -7,6 +7,7 @@ import {
 } from "@uwdata/mosaic-core";
 // @ts-types="../deps/mosaic-sql.d.ts"
 import { count, Query } from "@uwdata/mosaic-sql";
+import { assert } from "../utils/assert.ts";
 
 interface StatusBarOptions {
 	table: string;
@@ -66,7 +67,13 @@ export class StatusBar extends MosaicClient {
 		return query;
 	}
 
-	queryResult(table: arrow.Table<{ count: arrow.Int }>) {
+	queryResult(table: flech.Table) {
+		assert(
+			table.schema.fields.find((f) => f.name === "count")?.type.typeId ===
+				flech.Type.Int,
+			"Expected count field to be an integer",
+		);
+
 		let count = Number(table.get(0)?.count ?? 0);
 		if (!this.#totalRows) {
 			// we need to know the total number of rows to display

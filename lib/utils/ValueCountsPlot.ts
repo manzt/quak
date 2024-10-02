@@ -1,14 +1,11 @@
 import { effect, signal } from "@preact/signals-core";
-import type * as arrow from "apache-arrow";
+import type * as flech from "@uwdata/flechette";
 // @ts-types="npm:@types/d3"
 import * as d3 from "d3";
 import { assert } from "./assert.ts";
 import { formatDataType, percentFormatter } from "./formatting.ts";
 
-type CountTableData = arrow.Table<{
-	key: arrow.Utf8;
-	total: arrow.Int;
-}>;
+type CountTableData = flech.Table;
 
 interface ValueCountsPlot {
 	width?: number;
@@ -24,7 +21,7 @@ interface ValueCountsPlot {
 
 export function ValueCountsPlot(
 	data: CountTableData,
-	field: arrow.Field,
+	field: flech.Field,
 	{
 		width = 125,
 		height = 30,
@@ -178,9 +175,11 @@ function createBar(opts: {
 }
 
 function prepareData(data: CountTableData) {
-	let arr: Array<{ key: string; total: number }> = data
+	let arr = data
 		.toArray()
-		.toSorted((a, b) => b.total - a.total);
+		.toSorted((a, b) => b.total - a.total) as Array<
+			{ key: string; total: number }
+		>;
 	let total = arr.reduce((acc, d) => acc + d.total, 0);
 	return {
 		bins: arr.filter((d) =>

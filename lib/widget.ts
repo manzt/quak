@@ -2,7 +2,7 @@
 import * as mc from "@uwdata/mosaic-core";
 // @ts-types="./deps/mosaic-sql.d.ts";
 import { Query } from "@uwdata/mosaic-sql";
-import * as arrow from "apache-arrow";
+import * as flech from "@uwdata/flechette";
 import * as uuid from "@lukeed/uuid";
 
 import { DataTable } from "./clients/DataTable.ts";
@@ -12,26 +12,29 @@ import { defer } from "./utils/defer.ts";
 type Model = {
 	_table_name: string;
 	_columns: Array<string>;
-	temp_indexes: boolean;
+	data_cube_schema: string;
 	sql: string;
 };
 
 interface OpenQuery {
 	query: mc.ConnectorQuery;
 	startTime: number;
-	resolve: (x: arrow.Table | Record<string, unknown>) => void;
+	resolve: (x: flech.Table | Record<string, unknown>) => void;
 	reject: (err?: string) => void;
 }
 
 export default () => {
 	let coordinator = new mc.Coordinator();
-	let schema: arrow.Schema;
+	let schema: flech.Schema;
 
 	return {
 		async initialize(
-			{ model }: import("npm:@anywidget/types").InitializeProps<Model>,
+			{ model }: import("npm:@anywidget/types@0.2.0").InitializeProps<
+				Model
+			>,
 		) {
 			let logger = coordinator.logger(_voidLogger());
+			let getDataCubeSchema = () => model.get("data_cube_schema");
 			let openQueries = new Map<string, OpenQuery>();
 
 			/**
@@ -41,7 +44,7 @@ export default () => {
 			 */
 			function send(
 				query: mc.ConnectorQuery,
-				resolve: (value: arrow.Table | Record<string, unknown>) => void,
+				resolve: (value: flech.Table | Record<string, unknown>) => void,
 				reject: (reason?: string) => void,
 			) {
 				let id = uuid.v4();
@@ -71,7 +74,7 @@ export default () => {
 				} else {
 					switch (msg.type) {
 						case "arrow": {
-							let table = arrow.tableFromIPC(buffers[0].buffer);
+							let table = flech.tableFromIPC(buffers[0].buffer);
 							logger.log("table", table);
 							query.resolve(table);
 							break;
@@ -93,29 +96,32 @@ export default () => {
 			coordinator.databaseConnector({
 				query(query) {
 					let { promise, resolve, reject } = defer<
-						arrow.Table | Record<string, unknown>,
+						flech.Table | Record<string, unknown>,
 						string
 					>();
 					send(query, resolve, reject);
 					return promise;
 				},
 			});
+			coordinator.dataCubeIndexer.schema = getDataCubeSchema();
+			model.on("change:data_cube_schema", () => {
+				coordinator.dataCubeIndexer.schema = getDataCubeSchema();
+			});
 
-			// get some initial data to get the schema
-			let empty = await coordinator.query(
-				Query
-					.from(model.get("_table_name"))
-					.select(...model.get("_columns"))
-					.limit(0)
-					.toString(),
-			);
-			schema = empty.schema;
+			schema = await getTableSchema(coordinator, {
+				tableName: model.get("_table_name"),
+				columns: model.get("_columns"),
+			});
 
 			return () => {
 				coordinator.clear();
 			};
 		},
-		render({ model, el }: import("npm:@anywidget/types").RenderProps<Model>) {
+		render(
+			{ model, el }: import("npm:@anywidget/types@0.2.0").RenderProps<
+				Model
+			>,
+		) {
 			let table = new DataTable({
 				table: model.get("_table_name"),
 				schema: schema,
@@ -129,6 +135,23 @@ export default () => {
 		},
 	};
 };
+
+async function getTableSchema(
+	coordinator: mc.Coordinator,
+	options: {
+		tableName: string;
+		columns: Array<string>;
+	},
+) {
+	let empty = await coordinator.query(
+		Query
+			.from(options.tableName)
+			.select(...options.columns)
+			.limit(0)
+			.toString(),
+	);
+	return empty.schema;
+}
 
 function _voidLogger() {
 	return Object.fromEntries(

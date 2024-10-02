@@ -4,7 +4,7 @@ import * as d3 from "d3";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
 import type { Bin, Scale } from "../types.ts";
-import type * as arrow from "apache-arrow";
+import type * as flech from "@uwdata/flechette";
 import { formatDataType, percentFormatter } from "./formatting.ts";
 
 interface HistogramOptions {
@@ -29,7 +29,7 @@ interface HistogramOptions {
  */
 export function CrossfilterHistogramPlot(
 	bins: Array<Bin>,
-	field: arrow.Field,
+	field: flech.Field,
 	{
 		type = "number",
 		width = 125,

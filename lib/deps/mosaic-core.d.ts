@@ -1,6 +1,6 @@
 // @ts-types="./mosaic-sql.d.ts";
 import type { Query, SQLExpression } from "@uwdata/mosaic-sql";
-import type * as arrow from "apache-arrow";
+import type * as flechette from "@uwdata/flechette";
 
 export interface Interactor<T = unknown> {
 	reset(): void;
@@ -113,7 +113,7 @@ export class MosaicClient {
 	query(filter?: Array<unknown>): Query;
 	/** Called before the coordinator submitting a query to inform the client */
 	queryPending(): this;
-	queryResult(data: arrow.Table): this;
+	queryResult(data: flechette.Table): this;
 	queryError(error: unknown): this;
 	requestQuery(query: Query): void;
 	requestUpdate(query: Query): void;
@@ -124,7 +124,7 @@ export type ConnectorQuery = { type: "arrow" | "json"; sql: string };
 export interface Connector {
 	query(
 		query: ConnectorQuery,
-	): Promise<arrow.Table | Record<string, unknown>>;
+	): Promise<flechette.Table | Record<string, unknown>>;
 }
 
 export class Coordinator {
@@ -134,8 +134,11 @@ export class Coordinator {
 	prefetch(query: Query): void;
 	logger(impl?: unknown): Logger;
 	databaseConnector(connector: Connector): void;
-	query(query: Query): Promise<arrow.Table>;
+	query(query: Query): Promise<flechette.Table>;
 	clear(): void;
+	dataCubeIndexer: {
+		schema: string | undefined;
+	};
 }
 
 type Logger = typeof console & {

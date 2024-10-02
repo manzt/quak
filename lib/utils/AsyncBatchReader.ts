@@ -22,13 +22,13 @@ import { assert } from "./assert.ts";
  */
 export class AsyncBatchReader<T> {
 	/** the iterable batches to read */
-	#batches: Array<{ data: Iterator<T>; last: boolean }> = [];
+	#batches: Array<{ data: Generator<T>; last: boolean }> = [];
 	/** the index of the current row */
 	#index: number = 0;
 	/** resolves a promise for when the next batch is available */
 	#resolve: (() => void) | null = null;
 	/** the current batch */
-	#current: { data: Iterator<T>; last: boolean } | null = null;
+	#current: { data: Generator<T>; last: boolean } | null = null;
 	/** A function to request more data. */
 	#requestNextBatch: () => void;
 	/**
@@ -50,7 +50,7 @@ export class AsyncBatchReader<T> {
 	 * @param options
 	 * @param options.last - whether this is the last batch
 	 */
-	enqueueBatch(batch: Iterator<T>, { last }: { last: boolean }) {
+	enqueueBatch(batch: Generator<T>, { last }: { last: boolean }) {
 		this.#batches.push({ data: batch, last });
 		if (this.#resolve) {
 			this.#resolve();

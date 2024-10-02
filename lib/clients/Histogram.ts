@@ -9,7 +9,7 @@ import {
 // @ts-types="../deps/mosaic-sql.d.ts";
 import { count, Query, type SQLExpression } from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
-import type * as arrow from "apache-arrow";
+import type * as flech from "@uwdata/flechette";
 
 import { CrossfilterHistogramPlot } from "../utils/CrossfilterHistogramPlot.ts";
 
@@ -21,7 +21,7 @@ interface HistogramOptions {
 	/** The table to query. */
 	table: string;
 	/** An arrow Field containing the column info to use for the histogram. */
-	field: arrow.Field;
+	field: flech.Field;
 	/** The column to use for the histogram. */
 	column: string;
 	/** The type of the column. Must be "number" or "date". */
@@ -30,14 +30,14 @@ interface HistogramOptions {
 	filterBy: Selection;
 }
 
-type BinTable = arrow.Table<{ x1: arrow.Int; x2: arrow.Int; y: arrow.Int }>;
+type BinTable = flech.Table;
 
 /** Represents a Cross-filtered Histogram */
 export class Histogram extends MosaicClient implements Mark {
 	#source: {
 		table: string;
 		column: string;
-		field: arrow.Field;
+		field: flech.Field;
 		type: "number" | "date";
 	};
 	#el: HTMLElement = document.createElement("div");
@@ -102,11 +102,9 @@ export class Histogram extends MosaicClient implements Mark {
 	 * Provide query result data to the mark.
 	 */
 	queryResult(data: BinTable) {
-		let bins = Array.from(data, (d) => ({
-			x0: d.x1,
-			x1: d.x2,
-			length: d.y,
-		}));
+		let bins: Array<{ x0: number; x1: number; length: number }> = data
+			.toArray()
+			.map((d) => ({ x0: d.x1, x1: d.x2, length: d.y }));
 		let nullCount = 0;
 		let nullBinIndex = bins.findIndex((b) => b.x0 == null);
 		if (nullBinIndex >= 0) {

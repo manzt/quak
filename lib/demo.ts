@@ -1,4 +1,5 @@
 /// <reference types="npm:vite/client" />
+// @ts-types="./deps/mosaic-core.d.ts";
 import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 
