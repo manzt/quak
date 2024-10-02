@@ -32,9 +32,12 @@ class Widget(anywidget.AnyWidget):
     _esm = pathlib.Path(__file__).parent / "widget.js"
     _table_name = traitlets.Unicode().tag(sync=True)
     _columns = traitlets.List(traitlets.Unicode()).tag(sync=True)
+
+    # The SQL query for the current data (read-only)
     sql = traitlets.Unicode().tag(sync=True)
-    # Whether data cube indexes should be created as temp tables
-    temp_indexes = traitlets.Bool().tag(sync=True)
+
+    # Where data cube indexes should be created
+    data_cube_schema = traitlets.Unicode("quak").tag(sync=True)
 
     def __init__(self, data, *, table: str = "df"):
         if isinstance(data, duckdb.DuckDBPyConnection):
@@ -68,7 +71,6 @@ class Widget(anywidget.AnyWidget):
         super().__init__(
             _table_name=table,
             _columns=get_columns(conn, table),
-            temp_indexes=True,
             sql=f'SELECT * FROM "{table}"',
         )
         self.on_msg(self._handle_custom_msg)
