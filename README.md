@@ -18,11 +18,6 @@ capturing interactions as executable SQL queries.
 
 ## install
 
-> [!WARNING]
-> **quak** is a prototype exploring a high-performance data profiler based on
-> anywidget. It is not production-ready. Expect bugs. Open-sourced for SciPy
-> 2024.
-
 ```sh
 pip install quak
 ```
