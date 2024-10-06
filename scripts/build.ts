@@ -58,6 +58,7 @@ if (Deno.args.includes("--watch")) {
 		// loader to download and bundle deps locally
 		delete options.alias;
 		delete options.sourcemap;
+		options.minify = true;
 		options.plugins = [...denoPlugins({
 			importMapURL: new URL("deno.json", root).href,
 		})];
