@@ -158,3 +158,41 @@ function _voidLogger() {
 		Object.keys(console).map((key) => [key, () => {}]),
 	);
 }
+
+export async function embed(el: HTMLElement) {
+	let coordinator = new mc.Coordinator();
+	let logger = coordinator.logger();
+
+	coordinator.databaseConnector({
+		async query({ type, sql }) {
+			logger.log(`query: ${sql}`);
+			logger.log(`type: ${type}`);
+			let url = new URL("/api/query", import.meta.url);
+			url.searchParams.set("type", type);
+			let response = await fetch(url, { method: "POST", body: sql });
+			assert(response.ok, `Failed to query`);
+			switch (type) {
+				case "arrow": {
+					let buffer = await response.arrayBuffer();
+					let bytes = new Uint8Array(buffer);
+					return flech.tableFromIPC(bytes);
+				}
+				case "json":
+					return response.json();
+				default:
+					throw new Error(`Unsupported format ${type}`);
+			}
+		},
+	});
+	let dt = new DataTable({
+		table: "df",
+		schema: await getTableSchema(coordinator, {
+			tableName: "df",
+			columns: ["*"],
+		}),
+		height: 500,
+	});
+	coordinator.connect(dt);
+	el.appendChild(dt.node());
+	return dt;
+}

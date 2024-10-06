@@ -11,3 +11,7 @@ data/
 .vite/
 src/quak/widget.js
 notebooks
+
+/cli/target
+/cli/src/static/widget.js
+

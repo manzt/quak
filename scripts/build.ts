@@ -58,9 +58,21 @@ if (Deno.args.includes("--watch")) {
 		// loader to download and bundle deps locally
 		delete options.alias;
 		delete options.sourcemap;
+		options.minify = true;
 		options.plugins = [...denoPlugins({
 			importMapURL: new URL("deno.json", root).href,
 		})];
 	}
 	await esbuild.build(options);
+
+	await Deno.copyFile(
+		new URL("src/quak/widget.js", root),
+		new URL("cli/src/static/widget.js", root),
+	);
+
+	console.log(
+		`\n  Copied src/quak/%cwidget.js to %c${"cli/src/static/widget.js"}`,
+		"font-weight: bold",
+		"color: cyan"
+	);
 }
