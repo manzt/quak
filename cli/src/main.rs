@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
+use std::borrow::Cow;
 use std::sync::Arc;
-use std::{borrow::Cow, path::PathBuf};
 use tao::{
     dpi::Size,
     event::{Event, WindowEvent},
@@ -38,7 +38,7 @@ fn main() -> Result<()> {
     };
 
     let pool = Arc::new(db::ConnectionPool::new(":memory:", 10)?);
-    pool.execute(&format!("SELECT * as df FROM {}", from))?;
+    pool.execute(&format!("CREATE VIEW df as SELECT * FROM {}", from))?;
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -48,15 +48,19 @@ fn main() -> Result<()> {
         .unwrap();
 
     let _webview = WebViewBuilder::new(&window)
+        .with_devtools(true)
         .with_custom_protocol("quak".into(), move |request| {
             match get_quak_response(pool.clone(), request) {
                 Ok(r) => r.map(Into::into),
-                Err(e) => Response::builder()
-                    .header(CONTENT_TYPE, "text/plain")
-                    .status(200)
-                    .body(e.to_string().as_bytes().to_vec())
-                    .unwrap()
-                    .map(Into::into),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    Response::builder()
+                        .header(CONTENT_TYPE, "text/plain")
+                        .status(200)
+                        .body(e.to_string().as_bytes().to_vec())
+                        .unwrap()
+                        .map(Into::into)
+                }
             }
         })
         .with_url("quak://localhost")
