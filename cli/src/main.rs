@@ -9,7 +9,7 @@ use tao::{
     window::WindowBuilder,
 };
 use wry::{
-    http::{header::CONTENT_TYPE, Method, Request, Response},
+    http::{Method, Request, Response},
     WebViewBuilder,
 };
 
@@ -18,23 +18,33 @@ mod db;
 #[derive(Parser)]
 #[clap(name = "quak", version = "0.1.0", author = "Trevor Manz")]
 struct Cli {
-    // a file for the cli
+    /// whether to pretty print the query
+    #[clap(long, short, action)]
+    pretty: bool,
+    /// the file to view
     file: std::path::PathBuf,
 }
 
 fn main() -> Result<()> {
     let args = Cli::parse();
     let (width, height) = (960.0, 550.0);
-
     let current_query = Arc::new(Mutex::new(String::new()));
 
     if !args.file.exists() {
         anyhow::bail!("Invalid file provided");
     }
-
     let from = match args.file.extension().and_then(|e| e.to_str()) {
         Some("parquet") | Some("pq") => {
             format!("read_parquet(\"{}\")", args.file.display())
+        }
+        Some("csv") => {
+            format!("read_csv(\"{}\")", args.file.display())
+        }
+        Some("json") => {
+            format!("read_json(\"{}\")", args.file.display())
+        }
+        Some("tsv") => {
+            format!("read_tsv(\"{}\")", args.file.display())
         }
         _ => anyhow::bail!("Unsupported file type"),
     };
@@ -52,16 +62,22 @@ fn main() -> Result<()> {
     let current_query_clone = Arc::clone(&current_query);
     let _webview = WebViewBuilder::new(&window)
         .with_devtools(true)
-        .with_custom_protocol("quak".into(), move |request| {
-            match get_quak_response(Arc::clone(&pool), Arc::clone(&current_query_clone), request) {
-                Ok(r) => r.map(Into::into),
-                Err(e) => Response::builder()
-                    .header(CONTENT_TYPE, "text/plain")
-                    .status(200)
-                    .body(e.to_string().as_bytes().to_vec())
-                    .unwrap()
-                    .map(Into::into),
-            }
+        .with_asynchronous_custom_protocol("quak".into(), move |request, responder| {
+            responder.respond(
+                match get_quak_response(
+                    Arc::clone(&pool),
+                    Arc::clone(&current_query_clone),
+                    request,
+                ) {
+                    Ok(r) => r,
+                    Err(e) => Response::builder()
+                        .header("Content-Type", "text/plain")
+                        .status(200)
+                        .body(e.to_string().as_bytes().to_vec())
+                        .unwrap()
+                        .map(Into::into),
+                },
+            )
         })
         .with_url("quak://localhost")
         .build()?;
@@ -74,7 +90,12 @@ fn main() -> Result<()> {
             ..
         } = event
         {
-            println!("{:?}", current_query.clone().as_ref());
+            let sql = current_query.lock().unwrap();
+            if args.pretty {
+                println!("{}", format_simple_select(&sql, Some(&from)).unwrap());
+            } else {
+                println!("{}", sql);
+            }
             *control_flow = ControlFlow::Exit
         }
     });
@@ -88,12 +109,11 @@ enum Action {
 
 impl<T> TryFrom<&Request<T>> for Action {
     type Error = anyhow::Error;
-
     fn try_from(value: &Request<T>) -> Result<Self> {
-        let Some(params) = value.uri().query().map(querystring::querify) else {
+        let Some(query) = value.uri().query() else {
             anyhow::bail!("no query string found");
         };
-        for (k, v) in params {
+        for (k, v) in querystring::querify(query) {
             if !k.eq("type") {
                 continue;
             }
@@ -115,12 +135,12 @@ fn get_quak_response(
 ) -> Result<Response<Cow<'static, [u8]>>> {
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/") => Ok(Response::builder()
-            .header(CONTENT_TYPE, "text/html")
+            .header("Content-Type", "text/html")
             .status(200)
             .body(include_bytes!("./static/index.html").into())
             .unwrap()),
         (&Method::GET, "/widget.js") => Ok(Response::builder()
-            .header(CONTENT_TYPE, "application/javascript")
+            .header("Content-Type", "application/javascript")
             .status(200)
             .body(include_bytes!("./static/widget.js").into())
             .unwrap()),
@@ -128,12 +148,12 @@ fn get_quak_response(
             let sql = std::str::from_utf8(request.body())?;
             match Action::try_from(&request)? {
                 Action::Arrow => Ok(Response::builder()
-                    .header(CONTENT_TYPE, "application/octet-stream")
+                    .header("Content-Type", "application/vnd.apache.arrow.file")
                     .status(200)
                     .body(db.get_arrow(sql)?.into())
                     .unwrap()),
                 Action::Json => Ok(Response::builder()
-                    .header(CONTENT_TYPE, "application/json")
+                    .header("Content-Type", "application/json")
                     .status(200)
                     .body(db.get_json(sql)?.into())
                     .unwrap()),
@@ -149,9 +169,45 @@ fn get_quak_response(
             Ok(Response::builder().status(200).body(vec![].into()).unwrap())
         }
         _ => Ok(Response::builder()
-            .header(CONTENT_TYPE, "text/plain")
+            .header("Content-Type", "text/plain")
             .status(404)
             .body("Not Found".as_bytes().to_vec().into())
             .unwrap()),
     }
+}
+
+// Should probably have a proper parser but sqlformatter has a dependency conflict on regex
+fn format_simple_select(query: &str, replace_df: Option<&str>) -> Result<String> {
+    let Some((select, rest)) = query.split_once(" FROM ") else {
+        anyhow::bail!("Invalid query format");
+    };
+    Ok(format!(
+        "SELECT\n  {}\nFROM\n  {}{}",
+        select
+            .strip_prefix("SELECT ")
+            .unwrap()
+            .split(",")
+            .map(|c| c.trim())
+            .collect::<Vec<_>>()
+            .join(",\n  "),
+        replace_df.unwrap_or("\"df\""),
+        rest.split_once(" WHERE ")
+            .map(|(_, where_)| {
+                let conditions: Vec<_> = where_
+                    .trim()
+                    .trim_matches(|c| c == '(' || c == ')')
+                    .split(") AND (")
+                    .enumerate()
+                    .map(|(i, clause)| {
+                        if i == 0 {
+                            format!("    (\n      {}\n    )", clause)
+                        } else {
+                            format!("    AND (\n      {}\n    )", clause)
+                        }
+                    })
+                    .collect();
+                format!("\nWHERE\n  (\n{}\n  )", conditions.join("\n"))
+            })
+            .unwrap_or_else(|| "".to_string())
+    ))
 }

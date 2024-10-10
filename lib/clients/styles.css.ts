@@ -92,6 +92,7 @@ th {
 	border-left: solid 1px var(--light-silver);
 	padding: 5px 6px;
 	user-select: none;
+	-webkit-user-select: none;
 }
 
 .number,
@@ -151,6 +152,7 @@ tr:first-child td {
 	cursor: pointer;
 	background-color: var(--white);
 	user-select: none;
+	-webkit-user-select: none;
 }
 
 .status-bar {
