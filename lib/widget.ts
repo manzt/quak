@@ -168,11 +168,8 @@ export async function embed(el: HTMLElement) {
 			logger.log(`query: ${sql}`);
 			logger.log(`type: ${type}`);
 			let url = new URL("/api/query", import.meta.url);
-			url.searchParams.set("format", type);
-			let response = await fetch(url, {
-				method: "POST",
-				body: sql,
-			});
+			url.searchParams.set("type", type);
+			let response = await fetch(url, { method: "POST", body: sql });
 			assert(response.ok, `Failed to query`);
 			switch (type) {
 				case "arrow": {

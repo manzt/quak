@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
-use std::borrow::Cow;
 use std::sync::Arc;
+use std::{borrow::Cow, sync::Mutex};
 use tao::{
     dpi::Size,
     event::{Event, WindowEvent},
@@ -24,7 +24,9 @@ struct Cli {
 
 fn main() -> Result<()> {
     let args = Cli::parse();
-    let (width, height) = (960.0, 540.0);
+    let (width, height) = (960.0, 550.0);
+
+    let current_query = Arc::new(Mutex::new(String::new()));
 
     if !args.file.exists() {
         anyhow::bail!("Invalid file provided");
@@ -47,20 +49,18 @@ fn main() -> Result<()> {
         .build(&event_loop)
         .unwrap();
 
+    let current_query_clone = Arc::clone(&current_query);
     let _webview = WebViewBuilder::new(&window)
         .with_devtools(true)
         .with_custom_protocol("quak".into(), move |request| {
-            match get_quak_response(pool.clone(), request) {
+            match get_quak_response(Arc::clone(&pool), Arc::clone(&current_query_clone), request) {
                 Ok(r) => r.map(Into::into),
-                Err(e) => {
-                    eprintln!("{}", e);
-                    Response::builder()
-                        .header(CONTENT_TYPE, "text/plain")
-                        .status(200)
-                        .body(e.to_string().as_bytes().to_vec())
-                        .unwrap()
-                        .map(Into::into)
-                }
+                Err(e) => Response::builder()
+                    .header(CONTENT_TYPE, "text/plain")
+                    .status(200)
+                    .body(e.to_string().as_bytes().to_vec())
+                    .unwrap()
+                    .map(Into::into),
             }
         })
         .with_url("quak://localhost")
@@ -74,6 +74,7 @@ fn main() -> Result<()> {
             ..
         } = event
         {
+            println!("{:?}", current_query.clone().as_ref());
             *control_flow = ControlFlow::Exit
         }
     });
@@ -85,21 +86,31 @@ enum Action {
     Exec,
 }
 
-impl TryFrom<&str> for Action {
+impl<T> TryFrom<&Request<T>> for Action {
     type Error = anyhow::Error;
 
-    fn try_from(value: &str) -> Result<Self> {
-        match value {
-            "arrow" => Ok(Self::Arrow),
-            "json" => Ok(Self::Json),
-            "exec" => Ok(Self::Exec),
-            _ => Err(anyhow::anyhow!("Invalid action")),
+    fn try_from(value: &Request<T>) -> Result<Self> {
+        let Some(params) = value.uri().query().map(querystring::querify) else {
+            anyhow::bail!("no query string found");
+        };
+        for (k, v) in params {
+            if !k.eq("type") {
+                continue;
+            }
+            match v {
+                "arrow" => return Ok(Self::Arrow),
+                "json" => return Ok(Self::Json),
+                "exec" => return Ok(Self::Exec),
+                _ => anyhow::bail!("Invalid action"),
+            };
         }
+        anyhow::bail!("Invalid action")
     }
 }
 
 fn get_quak_response(
     db: Arc<db::ConnectionPool>,
+    current_query: Arc<Mutex<String>>,
     request: Request<Vec<u8>>,
 ) -> Result<Response<Cow<'static, [u8]>>> {
     match (request.method(), request.uri().path()) {
@@ -115,21 +126,7 @@ fn get_quak_response(
             .unwrap()),
         (&Method::POST, "/api/query") => {
             let sql = std::str::from_utf8(request.body())?;
-            let Some(action) = request
-                .uri()
-                .query()
-                .map(querystring::querify)
-                .map(|params| {
-                    params
-                        .iter()
-                        .find(|(k, _)| *k == "format")
-                        .map(|(_, v)| Action::try_from(*v).unwrap())
-                        .unwrap_or(Action::Exec)
-                })
-            else {
-                anyhow::bail!("Invalid query");
-            };
-            match action {
+            match Action::try_from(&request)? {
                 Action::Arrow => Ok(Response::builder()
                     .header(CONTENT_TYPE, "application/octet-stream")
                     .status(200)
@@ -146,6 +143,15 @@ fn get_quak_response(
                 }
             }
         }
-        _ => Err(anyhow::anyhow!("404 not found")),
+        (&Method::POST, "/api/sql") => {
+            let sql = std::str::from_utf8(request.body())?;
+            *current_query.lock().unwrap() = sql.to_string();
+            Ok(Response::builder().status(200).body(vec![].into()).unwrap())
+        }
+        _ => Ok(Response::builder()
+            .header(CONTENT_TYPE, "text/plain")
+            .status(404)
+            .body("Not Found".as_bytes().to_vec().into())
+            .unwrap()),
     }
 }
