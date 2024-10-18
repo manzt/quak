@@ -18,9 +18,6 @@ mod db;
 #[derive(Parser)]
 #[clap(name = "quak", version = "0.1.0", author = "Trevor Manz")]
 struct Cli {
-    /// whether to pretty print the query
-    #[clap(long, short, action)]
-    pretty: bool,
     /// the file to view
     file: std::path::PathBuf,
 }
@@ -91,11 +88,7 @@ fn main() -> Result<()> {
         } = event
         {
             let sql = current_query.lock().unwrap();
-            if args.pretty {
-                println!("{}", format_simple_select(&sql, Some(&from)).unwrap());
-            } else {
-                println!("{}", sql.replace("\"df\"", &from));
-            }
+            println!("{}", sql.replace("\"df\"", &from));
             *control_flow = ControlFlow::Exit
         }
     });
@@ -176,38 +169,3 @@ fn get_quak_response(
     }
 }
 
-// Should probably have a proper parser but sqlformatter has a dependency conflict on regex
-fn format_simple_select(query: &str, replace_df: Option<&str>) -> Result<String> {
-    let Some((select, rest)) = query.split_once(" FROM ") else {
-        anyhow::bail!("Invalid query format");
-    };
-    Ok(format!(
-        "SELECT\n  {}\nFROM\n  {}{}",
-        select
-            .strip_prefix("SELECT ")
-            .unwrap()
-            .split(",")
-            .map(|c| c.trim())
-            .collect::<Vec<_>>()
-            .join(",\n  "),
-        replace_df.unwrap_or("\"df\""),
-        rest.split_once(" WHERE ")
-            .map(|(_, where_)| {
-                let conditions: Vec<_> = where_
-                    .trim()
-                    .trim_matches(|c| c == '(' || c == ')')
-                    .split(") AND (")
-                    .enumerate()
-                    .map(|(i, clause)| {
-                        if i == 0 {
-                            format!("    (\n      {}\n    )", clause)
-                        } else {
-                            format!("    AND (\n      {}\n    )", clause)
-                        }
-                    })
-                    .collect();
-                format!("\nWHERE\n  (\n{}\n  )", conditions.join("\n"))
-            })
-            .unwrap_or_else(|| "".to_string())
-    ))
-}
