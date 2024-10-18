@@ -10,7 +10,6 @@
 	},
 	"compilerOptions": {
 		"verbatimModuleSyntax": true,
-		"allowJs": false,
 		"lib": [
 			"esnext",
 			"dom",
