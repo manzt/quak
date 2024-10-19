@@ -22,6 +22,9 @@
       }
     </style>
     <script type="module">
+      console.log('hello')
+    </script>
+    <script type="module">
       import { embed } from "/widget.js";
 
       let cliDt = await embed(datatable);
@@ -32,10 +35,11 @@
           headers: { "Content-Type": "text/plain" },
           body: sql,
         });
-        console.log(response.status);
+        console.log('response', response.status);
       });
     </script>
   <body>
+    Hello
     <div id="datatable"></div>
   </body>
 </html>
