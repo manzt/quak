@@ -1,3 +1,9 @@
+/*
+* Adapted from: https://github.com/uwdata/mosaic/blob/main/packages/duckdb-server-rust/src/db.rs
+*
+* Copyright (c) 2023, UW Interactive Data Lab
+* All rights reserved.
+*/
 use anyhow::Result;
 use duckdb::DuckdbConnectionManager;
 
