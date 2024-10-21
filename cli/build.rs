@@ -1,17 +1,17 @@
 use std::process::Command;
 
-fn main() {
-    println!("cargo:rerun-if-changed=../lib/widget.ts");
-
+fn main() -> std::io::Result<()> {
+    println!("cargo:rerun-if-changed=NULL");
     let output = Command::new("deno")
         .arg("run")
         .arg("build")
         .arg("--bundle")
-        .output()
-        .expect("Failed to execute command");
+        .output()?;
 
-    println!(
-        "Pre-compile output: {:?}",
-        String::from_utf8_lossy(&output.stdout)
-    );
+    if !output.status.success() {
+        println!("cargo:warning=Deno build command failed");
+    } else {
+        println!("cargo:warning=Built static assets with Deno");
+    }
+    Ok(())
 }
