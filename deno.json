@@ -38,7 +38,9 @@
 			"examples",
 			"README.md",
 			"CONTRIBUTING.md",
-			"dist"
+			"dist",
+			"cli",
+			"data"
 		]
 	},
 	"lint": {
@@ -51,7 +53,9 @@
 			".venv",
 			"src",
 			"examples",
-			"dist"
+			"dist",
+			"cli",
+			"data"
 		]
 	}
 }

@@ -1,6 +1,7 @@
 # quak-cli
 
-experimental cli for launching quak from the command line. not officially distributed.
+experimental cli for launching quak from the command line. not officially
+distributed.
 
 ## usage
 
@@ -8,7 +9,7 @@ experimental cli for launching quak from the command line. not officially distri
 quak ./path/to/data.parquet
 ```
 
-when the webview is closed, the SQL query is printed to stdout, allowing 
+when the webview is closed, the SQL query is printed to stdout, allowing
 composition within unix pipelines:
 
 ```sh

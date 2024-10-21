@@ -73,6 +73,6 @@ if (Deno.args.includes("--watch")) {
 	console.log(
 		`\n  Copied src/quak/%cwidget.js to %c${"cli/src/static/widget.js"}`,
 		"font-weight: bold",
-		"color: cyan"
+		"color: cyan",
 	);
 }
