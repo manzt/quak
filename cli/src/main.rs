@@ -22,6 +22,21 @@ struct Cli {
     file: std::path::PathBuf,
 }
 
+#[derive(Debug)]
+enum Format {
+    Parquet(String),
+    Text(String),
+}
+
+impl AsRef<str> for Format {
+    fn as_ref(&self) -> &str {
+        match self {
+            Format::Parquet(s) => s,
+            Format::Text(s) => s,
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let args = Cli::parse();
     let (width, height) = (960.0, 550.0);
@@ -30,24 +45,29 @@ fn main() -> Result<()> {
     if !args.file.exists() {
         anyhow::bail!("Invalid file provided");
     }
-    let from = match args.file.extension().and_then(|e| e.to_str()) {
+    let from: Format = match args.file.extension().and_then(|e| e.to_str()) {
         Some("parquet") | Some("pq") => {
-            format!("read_parquet(\"{}\")", args.file.display())
+            Format::Parquet(format!("read_parquet(\"{}\")", args.file.display()))
         }
-        Some("csv") => {
-            format!("read_csv(\"{}\")", args.file.display())
-        }
-        Some("json") => {
-            format!("read_json(\"{}\")", args.file.display())
-        }
-        Some("tsv") => {
-            format!("read_csv(\"{}\", delim=\"\\t\")", args.file.display())
-        }
+        Some("csv") => Format::Text(format!("read_csv(\"{}\")", args.file.display())),
+        Some("json") => Format::Text(format!("read_json(\"{}\")", args.file.display())),
+        Some("tsv") => Format::Text(format!(
+            "read_csv(\"{}\", delim=\"\\t\")",
+            args.file.display()
+        )),
         _ => anyhow::bail!("Unsupported file type"),
     };
 
     let pool = Arc::new(db::ConnectionPool::new(":memory:", 10)?);
-    pool.execute(&format!("CREATE VIEW df as SELECT * FROM {}", from))?;
+    pool.execute(&format!(
+        "CREATE {} df as SELECT * FROM {}",
+        // it's efficient to use a view for parquet, but we should read text into memory
+        match from {
+            Format::Parquet(_) => "VIEW",
+            Format::Text(_) => "TABLE",
+        },
+        from.as_ref()
+    ))?;
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -88,7 +108,7 @@ fn main() -> Result<()> {
         } = event
         {
             let sql = current_query.lock().unwrap();
-            println!("{}", sql.replace("\"df\"", &from));
+            println!("{}", sql.replace("\"df\"", from.as_ref()));
             *control_flow = ControlFlow::Exit
         }
     });
