@@ -30,7 +30,7 @@ cargo install --path=./cli --locked
 Or, if you want to install the binary without cloning the repository:
 
 ```sh
-cargo install --git=https://github.com/manzt/quak --root cli quak --locked
+cargo install --git=https://github.com/manzt/quak --branch=main --root=cli --locked quak
 ```
 
 ## development
