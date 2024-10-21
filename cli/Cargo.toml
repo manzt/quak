@@ -1,0 +1,15 @@
+[package]
+name = "quak"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+anyhow = "1.0.89"
+arrow = "52"
+clap = { version = "4.5.20", features = ["derive"] }
+duckdb = { version = "1", features = ["bundled", "csv", "json", "parquet", "url", "r2d2"] }
+querystring = "1.1.0"
+r2d2 = "0.8.10"
+tao = "0.30.3"
+wry = "0.45.0"

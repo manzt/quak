@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>quak</title>
+    <style>
+      * {
+        font-family: sans-serif;
+      }
+      body {
+        margin: 0px;
+      }
+      h1 {
+        font-size: 2.25rem;
+        font-weight: bold;
+        text-align: center;
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+      }
+      #datatable {
+        margin-bottom: 1rem;
+      }
+    </style>
+    <script type="module">
+      import { embed } from "/widget.js";
+
+      let cliDt = await embed(datatable);
+
+      cliDt.sql.subscribe((sql) => {
+        let response = fetch("/api/sql", {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: sql,
+        });
+        console.log(response.status);
+      });
+    </script>
+  <body>
+    <div id="datatable"></div>
+  </body>
+</html>
