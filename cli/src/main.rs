@@ -41,7 +41,7 @@ fn main() -> Result<()> {
             format!("read_json(\"{}\")", args.file.display())
         }
         Some("tsv") => {
-            format!("read_tsv(\"{}\")", args.file.display())
+            format!("read_csv(\"{}\", delim=\"\\t\")", args.file.display())
         }
         _ => anyhow::bail!("Unsupported file type"),
     };
@@ -168,4 +168,3 @@ fn get_quak_response(
             .unwrap()),
     }
 }
-
