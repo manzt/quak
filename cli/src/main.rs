@@ -90,7 +90,7 @@ fn main() -> Result<()> {
                     Err(e) => Response::builder()
                         .header("Content-Type", "text/plain")
                         .status(200)
-                        .body(e.to_string().as_bytes().to_vec())
+                        .body(e.to_string())
                         .unwrap()
                         .map(Into::into),
                 },
@@ -145,7 +145,7 @@ fn get_quak_response(
     db: Arc<db::ConnectionPool>,
     current_query: Arc<Mutex<String>>,
     request: Request<Vec<u8>>,
-) -> Result<Response<Cow<'static, [u8]>>> {
+) -> Result<Response<Vec<u8>>> {
     match (request.method(), request.uri().path()) {
         (&Method::GET, "/") => Ok(Response::builder()
             .header("Content-Type", "text/html")
@@ -163,28 +163,28 @@ fn get_quak_response(
                 Action::Arrow => Ok(Response::builder()
                     .header("Content-Type", "application/vnd.apache.arrow.file")
                     .status(200)
-                    .body(db.get_arrow(sql)?.into())
+                    .body(db.get_arrow(sql)?)
                     .unwrap()),
                 Action::Json => Ok(Response::builder()
                     .header("Content-Type", "application/json")
                     .status(200)
-                    .body(db.get_json(sql)?.into())
+                    .body(db.get_json(sql)?)
                     .unwrap()),
                 Action::Exec => {
                     db.execute(sql)?;
-                    Ok(Response::builder().status(200).body(vec![].into()).unwrap())
+                    Ok(Response::builder().status(200).body(vec![]).unwrap())
                 }
             }
         }
         (&Method::POST, "/api/sql") => {
             let sql = std::str::from_utf8(request.body())?;
             *current_query.lock().unwrap() = sql.to_string();
-            Ok(Response::builder().status(200).body(vec![].into()).unwrap())
+            Ok(Response::builder().status(200).body(vec![]).unwrap())
         }
         _ => Ok(Response::builder()
             .header("Content-Type", "text/plain")
             .status(404)
-            .body("Not Found".as_bytes().to_vec().into())
+            .body("Not Found".as_bytes().to_vec())
             .unwrap()),
     }
 }
