@@ -56,7 +56,7 @@ export class ValueCounts extends MosaicClient {
 		});
 	}
 
-	query(filter: Array<SQLExpression> = []): Query {
+	override query(filter: Array<SQLExpression> = []): Query {
 		let counts = Query
 			.from({ source: this.#table })
 			.select({
@@ -83,7 +83,7 @@ export class ValueCounts extends MosaicClient {
 			.groupby("key");
 	}
 
-	queryResult(data: CountTable): this {
+	override queryResult(data: CountTable): this {
 		if (!this.#plot) {
 			let plot = (this.#plot = ValueCountsPlot(data, this.#field));
 			this.#el.appendChild(plot);
