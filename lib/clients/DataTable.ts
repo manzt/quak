@@ -551,12 +551,6 @@ function shouldGrayoutValue(value: string) {
 	);
 }
 
-function isTableColumnHeaderWithSvg(
-	node: unknown,
-): node is ReturnType<typeof thcol> {
-	return node instanceof HTMLTableCellElement && "vis" in node;
-}
-
 /**
  * A mosaic SQL expression for ascending order
  *
