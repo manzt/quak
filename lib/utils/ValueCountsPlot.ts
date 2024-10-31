@@ -1,6 +1,6 @@
 import { effect, signal } from "@preact/signals-core";
 import type * as flech from "@uwdata/flechette";
-// @ts-types="npm:@types/d3"
+// @ts-types="npm:@types/d3@7"
 import * as d3 from "d3";
 import { assert } from "./assert.ts";
 import { formatDataType, percentFormatter } from "./formatting.ts";

@@ -1,4 +1,4 @@
-// @ts-types="npm:@types/d3"
+// @ts-types="npm:@types/d3@7"
 import * as d3 from "d3";
 import type { Bin } from "../types.ts";
 
