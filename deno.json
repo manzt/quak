@@ -30,32 +30,23 @@
 		"d3": "npm:d3@^7.9.0",
 		"htl": "npm:htl@~0.3.1"
 	},
+	"exclude": [
+		".venv",
+		"src",
+		"examples",
+		"README.md",
+		"CONTRIBUTING.md",
+		"dist",
+		"cli"
+	],
 	"fmt": {
-		"useTabs": true,
-		"exclude": [
-			".venv",
-			"src",
-			"examples",
-			"README.md",
-			"CONTRIBUTING.md",
-			"dist",
-			"cli",
-			"data"
-		]
+		"useTabs": true
 	},
 	"lint": {
 		"rules": {
 			"exclude": [
 				"prefer-const"
 			]
-		},
-		"exclude": [
-			".venv",
-			"src",
-			"examples",
-			"dist",
-			"cli",
-			"data"
-		]
+		}
 	}
 }

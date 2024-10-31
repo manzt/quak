@@ -54,7 +54,7 @@ export async function datatable(
 		Query
 			.from(table)
 			.select(options.columns ?? ["*"])
-			.limit(0)
+			.limit(0),
 	);
 	let client = new DataTable({
 		table,

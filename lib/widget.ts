@@ -147,7 +147,7 @@ async function getTableSchema(
 		Query
 			.from(options.tableName)
 			.select(...options.columns)
-			.limit(0)
+			.limit(0),
 	);
 	return empty.schema;
 }
