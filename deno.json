@@ -4,8 +4,9 @@
 	"exports": "./lib/mod.ts",
 	"license": "MIT",
 	"tasks": {
-		"build": "deno run -A scripts/build.ts",
-		"dev": "deno run -A scripts/build.ts --watch",
+		"dev": "deno run -A --node-modules-dir npm:esbuild --bundle --minify --loader:.css=text --format=esm --outfile=src/quak/widget.js lib/widget.ts --sourcemap=inline --watch",
+		"build": "deno run -A --node-modules-dir npm:esbuild --bundle --minify --loader:.css=text --format=esm --outfile=src/quak/widget.js lib/widget.ts",
+		"vite": "deno run -A --node-modules-dir npm:vite",
 		"check": "deno check lib/widget.ts"
 	},
 	"compilerOptions": {

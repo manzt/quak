@@ -23,8 +23,7 @@ uv run jupyter lab
 Alternatively, you can just work on the TypeScript side of things by running:
 
 ```sh
-npx vite
-# or deno run -A npm:vite
+deno task vite
 ```
 
 and editing `./lib/example.ts`.
@@ -41,12 +40,6 @@ deno task check
 uv run ruff check --fix
 uv run ruff format
 ```
-
-> [!NOTE]
-> Why the weird TypeScript stuff? In practice, hybrid Python/JS repos get messy
-> with npm and `node_modules`. With Deno there is no `node_modules`, and the
-> tool handles type-checking, linting, and formatting. The extra build scripts
-> serve to make nice development ergonamics within and outside of Jupyter.
 
 ## code structure
 
