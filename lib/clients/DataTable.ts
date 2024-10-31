@@ -265,21 +265,6 @@ export class DataTable extends MosaicClient {
 			<td style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></td>
 		</tr>`;
 
-		let observer = new IntersectionObserver((entries) => {
-			for (let entry of entries) {
-				if (!isTableColumnHeaderWithSvg(entry.target)) continue;
-				let vis = entry.target.vis;
-				if (!vis) continue;
-				if (entry.isIntersecting) {
-					this.coordinator.connect(vis);
-				} else {
-					this.coordinator?.disconnect(vis);
-				}
-			}
-		}, {
-			root: this.#tableRoot,
-		});
-
 		let cols = this.#meta.schema.fields.map((field) => {
 			let info = infos.find((c) => c.column === field.name);
 			assert(info, `No info for column ${field.name}`);
@@ -300,7 +285,7 @@ export class DataTable extends MosaicClient {
 				});
 			}
 			let th = thcol(field, this.#columnWidth, vis);
-			observer.observe(th);
+			this.coordinator.connect(vis);
 			return th;
 		});
 
