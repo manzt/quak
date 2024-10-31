@@ -55,7 +55,6 @@ export async function datatable(
 			.from(table)
 			.select(options.columns ?? ["*"])
 			.limit(0)
-			.toString(),
 	);
 	let client = new DataTable({
 		table,
@@ -153,7 +152,7 @@ export class DataTable extends MosaicClient {
 	/**
 	 * Mosaic function. Client defines the fields to be requested from the coordinator.
 	 */
-	fields(): Array<FieldRequest> {
+	override fields(): Array<FieldRequest> {
 		return this.#columns.map((column) => ({
 			table: this.#meta.table,
 			column,
@@ -181,7 +180,7 @@ export class DataTable extends MosaicClient {
 	 * @param filter - The filter predicates to apply to the query
 	 * @returns The query to be executed
 	 */
-	query(filter: Array<unknown> = []): Query {
+	override query(filter: Array<unknown> = []): Query {
 		let query = Query.from(this.#meta.table)
 			.select(this.#columns)
 			.where(filter)
@@ -200,7 +199,7 @@ export class DataTable extends MosaicClient {
 	 * A Mosiac lifecycle function called with arrow results from `query`.
 	 * Must be synchronous, and return `this`.
 	 */
-	queryResult(table: flech.Table): this {
+	override queryResult(table: flech.Table): this {
 		if (!this.#pendingInternalRequest) {
 			// data is not from an internal request, so reset table
 			this.#reader = new AsyncBatchReader(() => {
@@ -244,7 +243,7 @@ export class DataTable extends MosaicClient {
 	/**
 	 * Mosaic lifecycle function called when the client is connected to a coordinator.
 	 */
-	fieldInfo(infos: Array<FieldInfo>): this {
+	override fieldInfo(infos: Array<FieldInfo>): this {
 		let classes = classof(this.#meta.schema);
 
 		{

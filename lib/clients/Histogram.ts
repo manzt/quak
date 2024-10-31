@@ -71,7 +71,7 @@ export class Histogram extends MosaicClient implements Mark {
 		});
 	}
 
-	fields(): Array<FieldRequest> {
+	override fields(): Array<FieldRequest> {
 		return [
 			{
 				table: this.#source.table,
@@ -81,7 +81,7 @@ export class Histogram extends MosaicClient implements Mark {
 		];
 	}
 
-	fieldInfo(info: Array<FieldInfo>) {
+	override fieldInfo(info: Array<FieldInfo>) {
 		this.#fieldInfo = info[0];
 		return this;
 	}
@@ -90,7 +90,7 @@ export class Histogram extends MosaicClient implements Mark {
 	 * @param filter The filtering criteria to apply in the query.
 	 * @returns The client query
 	 */
-	query(filter: Array<SQLExpression> = []): Query {
+	override query(filter: Array<SQLExpression> = []): Query {
 		return Query
 			.from({ source: this.#source.table })
 			.select(this.#select)
@@ -101,7 +101,7 @@ export class Histogram extends MosaicClient implements Mark {
 	/**
 	 * Provide query result data to the mark.
 	 */
-	queryResult(data: BinTable) {
+	override queryResult(data: BinTable) {
 		let bins: Array<{ x0: number; x1: number; length: number }> = data
 			.toArray()
 			.map((d) => ({ x0: d.x1, x1: d.x2, length: d.y }));

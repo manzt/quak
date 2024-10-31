@@ -60,14 +60,14 @@ export class StatusBar extends MosaicClient {
 		});
 	}
 
-	query(filter = []) {
+	override query(filter = []) {
 		let query = Query.from(this.#table)
 			.select({ count: count() })
 			.where(filter);
 		return query;
 	}
 
-	queryResult(table: flech.Table) {
+	override queryResult(table: flech.Table) {
 		assert(
 			table.schema.fields.find((f) => f.name === "count")?.type.typeId ===
 				flech.Type.Int,
