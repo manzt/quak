@@ -58,51 +58,82 @@ function handleLoading(source: string | null) {
 	table.appendChild(loading);
 }
 
-async function getUrl(source: URL, { db }: { db: DuckDBClient }) {
+type SupportedFileType = "csv" | "tsv" | "json" | "parquet";
+
+function isSupportedFileType(t: unknown): t is SupportedFileType {
+	return (
+		t === "csv" ||
+		t === "tsv" ||
+		t === "json" ||
+		t === "parquet"
+	);
+}
+
+function resolveFileType(
+	filename: string,
+	type: string | null,
+): SupportedFileType {
+	if (type) {
+		assert(isSupportedFileType(type), `Unsupported file type: ${type}`);
+		return type as SupportedFileType;
+	}
+	let ext = filename.split(".").pop();
+	assert(ext, "Could not determine file type.");
+	if (isSupportedFileType(ext)) {
+		return ext;
+	}
+	throw new Error(`Unsupported file type: ${ext}`);
+}
+
+async function getUrl(
+	source: URL,
+	{ db, type }: { db: DuckDBClient; type: string | null },
+) {
+	let fileType = resolveFileType(source.pathname, type);
+
 	/**
 	 * DuckDB for whatever reason tries to make range requests for CSV/JSON files
 	 * We manually fetch TEXT files here and register them with DuckDB.
 	 */
-	if (
-		source.pathname.endsWith(".csv") ||
-		source.pathname.endsWith(".tsv") ||
-		source.pathname.endsWith(".json")
-	) {
+	if (fileType === "csv" || fileType === "tsv" || fileType === "json") {
 		let file = source.pathname.split("/").pop() ?? "";
 		let response = await fetch(source);
 		await db.registerFileText(file, await response.text());
-		if (file.endsWith(".csv")) {
+		if (fileType === "csv") {
 			return msql.loadCSV("df", file, { replace: true });
 		}
-		if (file.endsWith(".tsv")) {
+		if (fileType === "tsv") {
 			return msql.loadCSV("df", file, { replace: true, delim: "\t" });
 		}
-		if (file.endsWith(".json")) {
+		if (fileType === "json") {
 			return msql.loadJSON("df", file, { replace: true });
 		}
 	}
-	assert(source.pathname.endsWith(".parquet"), "Unsupported file format.");
+	assert(fileType === "parquet", "Unsupported file type.");
 	return msql.loadParquet(tableName, source, { replace: true });
 }
 
-async function getFile(file: File, { db }: { db: DuckDBClient }) {
-	let name = file.name;
-	if (name.endsWith(".csv")) {
-		await db.registerFileText(name, await file.text());
-		return msql.loadCSV(tableName, name, { replace: true });
+async function getFile(
+	f: File,
+	{ db, type }: { db: DuckDBClient; type: string | null },
+) {
+	let fileType = resolveFileType(f.name, type);
+	if (fileType === "csv") {
+		await db.registerFileText(f.name, await f.text());
+		return msql.loadCSV(tableName, f.name, { replace: true });
 	}
-	if (name.endsWith(".tsv")) {
-		await db.registerFileText(name, await file.text());
-		return msql.loadCSV(tableName, name, { replace: true, delim: "\t" });
+	if (fileType === "tsv") {
+		await db.registerFileText(f.name, await f.text());
+		return msql.loadCSV(tableName, f.name, { replace: true, delim: "\t" });
 	}
-	if (name.endsWith(".json")) {
-		await db.registerFileText(name, await file.text());
-		return msql.loadJSON(tableName, name, { replace: true });
+	if (fileType === "json") {
+		await db.registerFileText(f.name, await f.text());
+		return msql.loadJSON(tableName, f.name, { replace: true });
 	}
-	assert(name.endsWith(".parquet"));
-	let bytes = new Uint8Array(await file.arrayBuffer());
-	await db.registerFileBuffer(name, bytes);
-	return msql.loadParquet(tableName, name, { replace: true });
+	assert(fileType === "parquet", "Unsupported file type.");
+	let bytes = new Uint8Array(await f.arrayBuffer());
+	await db.registerFileBuffer(f.name, bytes);
+	return msql.loadParquet(tableName, f.name, { replace: true });
 }
 
 let dt: DataTable;
@@ -111,15 +142,17 @@ let coordinator = new mc.Coordinator();
 
 async function main() {
 	handleBanner();
-	let source = new URLSearchParams(location.search).get("source");
+	let params = new URLSearchParams(location.search);
+	let source = params.get("source");
+	let type = params.get("type");
 	handleLoading(source);
 	let connector = mc.wasmConnector();
 	let db: DuckDBClient = await connector.getDuckDB();
 	coordinator.databaseConnector(connector);
 
 	let exec = source
-		? await getUrl(new URL(source), { db })
-		: await getFile(await getFileSelect(), { db });
+		? await getUrl(new URL(source), { db, type })
+		: await getFile(await getFileSelect(), { db, type: null });
 
 	// Bug in mosaic-sql
 	exec = exec.replace("json_format", "format");
