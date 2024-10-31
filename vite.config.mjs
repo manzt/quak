@@ -1,28 +1,6 @@
-/**
- * @module
- *
- * A custom vite config for working on the `quak` TypeScript code outside of a
- * Python environment (i.e., just the front end).
- *
- * @example
- * ```sh
- * $ npx vite
- * $ deno run -A npm:vite
- * ```
- *
- * It does the same "trick" as the other build script to resolve modules to
- * external urls using the importmap in `deno.json`.
- */
-import * as fs from "node:fs/promises";
-import { mapImports } from "./scripts/npm-specifier-to-cdn-url.mjs";
+import deno from "npm:@deno/vite-plugin@1";
 
-let importmap = await fs
-	.readFile(new URL("deno.json", import.meta.url), { encoding: "utf-8" })
-	.then(JSON.parse);
-
-/** @type {import("npm:vite").UserConfig} */
+/** @type {import("npm:vite@5").UserConfig} */
 export default {
-	resolve: {
-		alias: mapImports(importmap.imports),
-	},
+	plugins: [deno()],
 };
