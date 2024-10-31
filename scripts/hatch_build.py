@@ -22,4 +22,4 @@ class QuakBuildHook(BuildHookInterface):
             return
 
         if not (ROOT / "src/quak/widget.js").exists():
-            subprocess.check_call(["deno", "task", "build"], cwd=ROOT)
+            subprocess.check_call(["deno", "task", "build", "--bundle"], cwd=ROOT)
