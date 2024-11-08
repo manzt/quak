@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
         with:
-          version: "0.4.x"
+          version: "0.5.x"
       - run: |
           uv run ruff format --check
           uv run ruff check

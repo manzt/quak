@@ -20,7 +20,7 @@ jobs:
           deno-version: v2.x
       - uses: astral-sh/setup-uv@v3
         with:
-          version: "0.4.x"
+          version: "0.5.x"
 
       - run: uv build
 
