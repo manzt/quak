@@ -69,9 +69,10 @@ export class StatusBar extends MosaicClient {
 
 	override queryResult(table: flech.Table) {
 		assert(
-			table.schema.fields.find((f) => f.name === "count")?.type.typeId ===
-				flech.Type.Int,
-			"Expected count field to be an integer",
+			isNumericArrowField(
+				table.schema.fields.find((f) => f.name === "count"),
+			),
+			"Expected count field to be an integer or float",
 		);
 
 		let count = Number(table.get(0)?.count ?? 0);
@@ -100,4 +101,11 @@ function isObject(x: unknown): x is Record<string, unknown> {
 
 function isInteractor(x: unknown): x is Interactor {
 	return isObject(x) && "clause" in x && "reset" in x;
+}
+
+function isNumericArrowField(field?: flech.Field) {
+	return (
+		field?.type.typeId === flech.Type.Int ||
+		field?.type.typeId === flech.Type.Float
+	);
 }
