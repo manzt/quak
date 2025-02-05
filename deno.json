@@ -1,6 +1,6 @@
 {
 	"name": "@manzt/quak",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"exports": "./lib/mod.ts",
 	"license": "MIT",
 	"tasks": {
