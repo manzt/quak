@@ -23,6 +23,7 @@ dev-dependencies = [
     "ruff>=0.6.2",
     "polars>=1.5.0",
     "vega-datasets>=0.9.0",
+    "ibis-framework[duckdb]>=6; python_version >= '3.9'",
 ]
 
 [tool.ruff.lint]

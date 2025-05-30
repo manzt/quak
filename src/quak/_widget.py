@@ -12,10 +12,12 @@ import traitlets
 from ._util import (
     arrow_table_from_dataframe_protocol,
     arrow_table_from_ipc,
+    gen_unique_name,
     get_columns,
     has_pycapsule_stream_interface,
     is_arrow_ipc,
     is_dataframe_api_obj,
+    is_ibis_duckdb,
     is_polars,
     table_to_ipc,
 )
@@ -42,6 +44,17 @@ class Widget(anywidget.AnyWidget):
     def __init__(self, data, *, table: str = "df"):
         if isinstance(data, duckdb.DuckDBPyConnection):
             conn = data
+        elif is_ibis_duckdb(data):
+            backend = data.get_backend()
+            conn = backend.con
+            table = gen_unique_name()
+            # if the given table is a memtable, need to register it so that the
+            # following backend.compile(data) references a table that actually exists.
+            backend._register_in_memory_tables(data)
+            # create a view, not a table, so that if you have an eg postgres
+            # database attached to duckdb, you can query it without
+            # materializing the entire table from postgres into duckdb.
+            backend.raw_sql(f"CREATE TEMP VIEW {table} AS ({backend.compile(data)})")
         else:
             conn = duckdb.connect(":memory:")
             if is_polars(data):
