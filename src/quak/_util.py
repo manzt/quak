@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import sys
 import typing
+import uuid
 
 DataFrameObject = typing.Any
 
 if typing.TYPE_CHECKING:
     import duckdb
+    import ibis
     import polars as pl
     import pyarrow as pa
 
@@ -104,3 +106,17 @@ def is_polars(obj: object) -> typing.TypeGuard[pl.DataFrame]:
     """Check if an object is a Polars DataFrame."""
     polars = sys.modules.get("polars")
     return polars is not None and isinstance(obj, polars.DataFrame)
+
+
+def is_ibis_duckdb(obj: object) -> typing.TypeGuard[ibis.Table]:
+    """Check if an object is an ibis Table backed by DuckDB."""
+    ibis = sys.modules.get("ibis")
+    if ibis is None or not isinstance(obj, ibis.Table):
+        return False
+    backend = obj.get_backend()
+    return backend.name == "duckdb"
+
+
+def gen_unique_name(prefix: str = "quak") -> str:
+    """Generate a unique name with a given prefix."""
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
