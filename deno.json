@@ -9,6 +9,7 @@
 		"vite": "deno run -A --node-modules-dir npm:vite",
 		"check": "deno check lib/widget.ts"
 	},
+	"nodeModulesDir": "auto",
 	"compilerOptions": {
 		"verbatimModuleSyntax": true,
 		"lib": [
