@@ -91,6 +91,21 @@ widget = mo.ui.anywidget(quak.Widget(df))
 widget
 ```
 
+### Using Quak with Panel
+
+**Quak** can be also be used in [**Panel**](https://panel.holoviz.org) tools and data apps. To  enable usage you must install [ipywidgets_bokeh](https://pypi.org/project/ipywidgets-bokeh/) and add `"ipywidget"` to `pn.extension` as described in the [Panel IPyWidget](https://panel.holoviz.org/reference/panes/IPyWidget.html) reference guide.
+
+```python
+import panel as pn
+import polars as pl
+import quak
+
+pn.extension("ipywidgets")
+df = pl.read_parquet("https://github.com/uwdata/mosaic/raw/main/data/athletes.parquet")
+widget = pn.panel(quak.Widget(df))
+widget
+```
+
 ## contributing
 
 Contributors welcome! Check the [Contributors Guide](./CONTRIBUTING.md) to get
