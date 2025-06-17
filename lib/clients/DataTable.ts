@@ -114,9 +114,9 @@ export class DataTable extends MosaicClient {
 			maxHeight = `${source.height}px`;
 		}
 
-		let tableRoot = html`<div class="table-container" style=${{
-			maxHeight,
-		}}>`;
+		let tableRoot = html`
+			<div class="table-container" style="${{ maxHeight }}"></div>
+		`;
 		// @deno-fmt-ignore
 		tableRoot.appendChild(
 			html.fragment`<table style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
@@ -132,9 +132,15 @@ export class DataTable extends MosaicClient {
 			}
 		});
 
-		let container = html`<div class="quak"></div>`;
+		let container = html`
+			<div class="quak"></div>
+		`;
 		container.appendChild(tableRoot);
-		this.#shadowRoot.appendChild(html`<style>${stylesString}</style>`);
+		this.#shadowRoot.appendChild(html`
+			<style>
+			${stylesString}
+			</style>
+		`);
 		this.#shadowRoot.appendChild(container);
 	}
 
@@ -401,8 +407,9 @@ function thcol(
 	</svg>`;
 	let uparrow: SVGPathElement = svg.children[0];
 	let downarrow: SVGPathElement = svg.children[1];
-	let verticalResizeHandle: HTMLDivElement =
-		html`<div class="resize-handle"></div>`;
+	let verticalResizeHandle: HTMLDivElement = html`
+		<div class="resize-handle"></div>
+	`;
 	// @deno-fmt-ignore
 	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
 	// @deno-fmt-ignore

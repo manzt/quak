@@ -72,9 +72,11 @@ export default () => {
 					logger.error(msg.error);
 					return;
 				} else {
+					const buffer = buffers[0].buffer;
+					assert(buffer instanceof ArrayBuffer || buffer instanceof Uint8Array);
 					switch (msg.type) {
 						case "arrow": {
-							let table = flech.tableFromIPC(buffers[0].buffer);
+							let table = flech.tableFromIPC(buffer);
 							logger.log("table", table);
 							query.resolve(table);
 							break;
