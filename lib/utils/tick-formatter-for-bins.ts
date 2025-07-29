@@ -1,9 +1,5 @@
-// @ts-types="npm:@types/d3@7"
 import * as d3 from "d3";
-import {
-	timeInterval as mosaicTimeInterval,
-	type TimeUnit,
-} from "@uwdata/mosaic-sql";
+import { timeInterval, type TimeUnit } from "@uwdata/mosaic-sql";
 import type { Bin } from "../types.ts";
 
 const formatMap: Record<TimeUnit, (date: Date) => string> = {
@@ -29,7 +25,7 @@ export function tickFormatterForBins(
 	if (type === "number") {
 		return d3.format("~s");
 	}
-	let interval = mosaicTimeInterval(
+	let interval = timeInterval(
 		bins[0].x0,
 		bins[bins.length - 1].x1,
 		bins.length,
