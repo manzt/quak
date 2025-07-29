@@ -114,9 +114,10 @@ export class DataTable extends MosaicClient {
 			maxHeight = `${source.height}px`;
 		}
 
-		let tableRoot = html`
-			<div class="table-container" style="${{ maxHeight }}"></div>
-		`;
+		let tableRoot = document.createElement("div");
+		tableRoot.className = "table-container";
+		tableRoot.style.maxHeight = maxHeight;
+
 		// @deno-fmt-ignore
 		tableRoot.appendChild(
 			html.fragment`<table style=${{ tableLayout: "fixed" }}>${this.#thead}${this.#tbody}</table>`
@@ -132,16 +133,16 @@ export class DataTable extends MosaicClient {
 			}
 		});
 
-		let container = html`
-			<div class="quak"></div>
-		`;
+		let container = document.createElement("div");
+		container.className = "quak";
 		container.appendChild(tableRoot);
-		this.#shadowRoot.appendChild(html`
-			<style>
-			${stylesString}
-			</style>
-		`);
 		this.#shadowRoot.appendChild(container);
+
+		{
+			const styles = document.createElement("style");
+			styles.innerText = stylesString;
+			this.#shadowRoot.appendChild(styles);
+		}
 	}
 
 	get #tableRoot(): HTMLDivElement {
@@ -264,9 +265,8 @@ export class DataTable extends MosaicClient {
 		}
 
 		// @deno-fmt-ignore
-		this.#templateRow = html`<tr><td></td>${
-			infos.map((info) => html.fragment`<td class=${classes[info.column]}></td>`)
-		}
+		this.#templateRow = html`<tr><td></td>${infos.map((info) => html.fragment`<td class=${classes[info.column]}></td>`)
+			}
 			<td style=${{ width: "99%", borderLeft: "none", borderRight: "none" }}></td>
 		</tr>`;
 
@@ -407,9 +407,9 @@ function thcol(
 	</svg>`;
 	let uparrow: SVGPathElement = svg.children[0];
 	let downarrow: SVGPathElement = svg.children[1];
-	let verticalResizeHandle: HTMLDivElement = html`
-		<div class="resize-handle"></div>
-	`;
+	let verticalResizeHandle = document.createElement("div");
+	verticalResizeHandle.className = "resize-handle";
+
 	// @deno-fmt-ignore
 	let sortButton = html`<span aria-role="button" class="sort-button" onmousedown=${nextSortState}>${svg}</span>`;
 	// @deno-fmt-ignore
