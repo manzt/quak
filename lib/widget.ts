@@ -7,6 +7,7 @@ import { DataTable } from "./clients/DataTable.ts";
 import { assert } from "./utils/assert.ts";
 
 import type * as aw from "npm:@anywidget/types@0.2.0";
+import { isFlechetteTable } from "./utils/guards.ts";
 
 type Model = {
 	_table_name: string;
@@ -129,7 +130,8 @@ async function getTableSchema(
 			.select(...options.columns)
 			.limit(0),
 		{ type: "arrow" },
-	) as flech.Table;
+	);
+	assert(isFlechetteTable(empty), "Expected a flechette table.");
 	return empty.schema;
 }
 

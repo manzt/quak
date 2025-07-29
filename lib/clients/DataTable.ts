@@ -24,6 +24,7 @@ import { signal } from "@preact/signals-core";
 
 import stylesString from "./styles.css.ts";
 import { StatusBar } from "./StatusBar.ts";
+import { isFlechetteTable } from "../utils/guards.ts";
 
 interface DataTableOptions {
 	table: string;
@@ -59,7 +60,8 @@ export async function datatable(
 			.select(options.columns ?? ["*"])
 			.limit(0),
 		{ type: "arrow" },
-	) as flech.Table;
+	);
+	assert(isFlechetteTable(empty), "Expected a flechette table");
 	let client = new DataTable({
 		table,
 		schema: empty.schema,

@@ -8,6 +8,7 @@ import {
 	column,
 	count,
 	type ExprNode,
+	type MaybeArray,
 	Query,
 	sql,
 	sum,
@@ -17,6 +18,7 @@ import { effect } from "@preact/signals-core";
 
 import { ValueCountsPlot } from "../utils/ValueCountsPlot.ts";
 import { assert } from "../utils/assert.ts";
+import { isFlechetteTable } from "../utils/guards.ts";
 
 interface UniqueValuesOptions {
 	/** The table to query. */
@@ -41,6 +43,28 @@ export class ValueCounts extends MosaicClient {
 		this.#table = options.table;
 		this.#column = options.field.name;
 		this.#field = options.field;
+
+		// FIXME: There is some issue with the mosaic client or the query we
+		// are using here. Updates to the Selection (`filterBy`) seem to be
+		// missed by the coordinator, and query/queryResult are not called
+		// by the coordinator when the filterBy is updated.
+		//
+		// Here we manually listen for the changes to filterBy and update this
+		// client internally. It _should_ go through the coordinator.
+		options.filterBy.addEventListener("value", async () => {
+			if (!this.#plot || !this.coordinator) {
+				return;
+			}
+			let filters = options.filterBy.predicate(this);
+			assert(
+				isExprNodeArray(filters),
+				`Filter is not expression array: ${filters}`,
+			);
+			let query = this.query(filters);
+			let data = await this.coordinator.query(query);
+			assert(isFlechetteTable(data), "Expected a flechette table.");
+			this.#plot.data.value = data;
+		});
 	}
 
 	override query(filter: Array<ExprNode> = []): Query {
@@ -101,4 +125,10 @@ export class ValueCounts extends MosaicClient {
 			node: () => this.#el,
 		};
 	}
+}
+
+function isExprNodeArray(
+	x: MaybeArray<string | boolean | undefined | ExprNode>,
+): x is Array<ExprNode> {
+	return Array.isArray(x) && x.every((y) => typeof y === "object");
 }
