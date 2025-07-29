@@ -1,25 +1,21 @@
-// @ts-types="./deps/mosaic-core.d.ts";
 import * as mc from "@uwdata/mosaic-core";
-// @ts-types="./deps/mosaic-sql.d.ts";
 import { Query } from "@uwdata/mosaic-sql";
 import * as flech from "@uwdata/flechette";
 import * as uuid from "@lukeed/uuid";
 
 import { DataTable } from "./clients/DataTable.ts";
 import { assert } from "./utils/assert.ts";
-import { defer } from "./utils/defer.ts";
 
 import type * as aw from "npm:@anywidget/types@0.2.0";
 
 type Model = {
 	_table_name: string;
 	_columns: Array<string>;
-	data_cube_schema: string;
 	sql: string;
 };
 
 interface OpenQuery {
-	query: mc.ConnectorQuery;
+	query: mc.ArrowQueryRequest | mc.JSONQueryRequest | mc.ExecQueryRequest;
 	startTime: number;
 	resolve: (x: flech.Table | Record<string, unknown>) => void;
 	reject: (err?: string) => void;
@@ -29,17 +25,11 @@ export default () => {
 	let coordinator = new mc.Coordinator();
 	return {
 		initialize({ model }: aw.InitializeProps<Model>) {
-			let logger = coordinator.logger(_voidLogger());
-			let getDataCubeSchema = () => model.get("data_cube_schema");
+			let logger = coordinator.logger(null);
 			let openQueries = new Map<string, OpenQuery>();
 
-			/**
-			 * @param query - the query to send
-			 * @param resolve - the promise resolve callback
-			 * @param reject - the promise reject callback
-			 */
 			function send(
-				query: mc.ConnectorQuery,
+				query: mc.ArrowQueryRequest | mc.JSONQueryRequest | mc.ExecQueryRequest,
 				resolve: (value: flech.Table | Record<string, unknown>) => void,
 				reject: (reason?: string) => void,
 			) {
@@ -56,23 +46,27 @@ export default () => {
 			model.on("msg:custom", (msg, buffers) => {
 				logger.group(`query ${msg.uuid}`);
 				logger.log("received message", msg, buffers);
-				let query = openQueries.get(msg.uuid);
+
+				const query = openQueries.get(msg.uuid);
+				assert(query, "no open query");
 				openQueries.delete(msg.uuid);
-				assert(query, `No query found for ${msg.uuid}`);
+
 				logger.log(
-					query.query.toString(),
+					query.query.sql,
 					(performance.now() - query.startTime).toFixed(1),
 				);
+
 				if (msg.error) {
 					query.reject(msg.error);
 					logger.error(msg.error);
-					return;
 				} else {
-					const buffer = buffers[0].buffer;
-					assert(buffer instanceof ArrayBuffer || buffer instanceof Uint8Array);
 					switch (msg.type) {
 						case "arrow": {
-							let table = flech.tableFromIPC(buffer);
+							const buffer = buffers[0].buffer;
+							assert(
+								buffer instanceof ArrayBuffer || buffer instanceof Uint8Array,
+							);
+							const table = mc.decodeIPC(buffer);
 							logger.log("table", table);
 							query.resolve(table);
 							break;
@@ -88,24 +82,18 @@ export default () => {
 						}
 					}
 				}
-				logger.groupEnd("query");
+				logger.groupEnd();
 			});
 
 			coordinator.databaseConnector({
 				query(query) {
-					let { promise, resolve, reject } = defer<
-						flech.Table | Record<string, unknown>,
-						string
-					>();
-					send(query, resolve, reject);
-					return promise;
+					// deno-lint-ignore no-explicit-any
+					return new Promise<any>((resolve, reject) =>
+						send(query, resolve, reject)
+					);
 				},
 			});
-			coordinator.dataCubeIndexer.schema = getDataCubeSchema();
-			model.on("change:data_cube_schema", () => {
-				coordinator.dataCubeIndexer.schema = getDataCubeSchema();
-			});
-
+			coordinator.preaggregator.schema = "mosaic";
 			return () => {
 				coordinator.clear();
 			};
@@ -140,14 +128,9 @@ async function getTableSchema(
 			.from(options.tableName)
 			.select(...options.columns)
 			.limit(0),
-	);
+		{ type: "arrow" },
+	) as flech.Table;
 	return empty.schema;
-}
-
-function _voidLogger() {
-	return Object.fromEntries(
-		Object.keys(console).map((key) => [key, () => {}]),
-	);
 }
 
 export async function embed(el: HTMLElement) {
@@ -159,7 +142,7 @@ export async function embed(el: HTMLElement) {
 			logger.log(`query: ${sql}`);
 			logger.log(`type: ${type}`);
 			let url = new URL("/api/query", import.meta.url);
-			url.searchParams.set("type", type);
+			url.searchParams.set("type", type ?? "arrow");
 			let response = await fetch(url, { method: "POST", body: sql });
 			assert(response.ok, `Failed to query`);
 			switch (type) {

@@ -36,9 +36,6 @@ class Widget(anywidget.AnyWidget):
     # The SQL query for the current data (read-only)
     sql = traitlets.Unicode().tag(sync=True)
 
-    # Where data cube indexes should be created
-    data_cube_schema = traitlets.Unicode("quak").tag(sync=True)
-
     def __init__(self, data, *, table: str = "df"):
         if isinstance(data, duckdb.DuckDBPyConnection):
             conn = data

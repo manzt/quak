@@ -1,13 +1,10 @@
-// @ts-types="../deps/mosaic-core.d.ts";
 import {
-	type ColumnField,
 	type FieldInfo,
-	type FieldRequest,
 	MosaicClient,
+	queryFieldInfo,
 	type Selection,
 } from "@uwdata/mosaic-core";
-// @ts-types="../deps/mosaic-sql.d.ts";
-import { count, Query, type SQLExpression } from "@uwdata/mosaic-sql";
+import { count, type ExprNode, Query } from "@uwdata/mosaic-sql";
 import * as mplot from "@uwdata/mosaic-plot";
 import type * as flech from "@uwdata/flechette";
 
@@ -42,9 +39,9 @@ export class Histogram extends MosaicClient implements Mark {
 	};
 	#el: HTMLElement = document.createElement("div");
 	#select: {
-		x1: ColumnField;
-		x2: ColumnField;
-		y: SQLExpression;
+		x1: ExprNode;
+		x2: ExprNode;
+		y: ExprNode;
 	};
 	#interval: mplot.Interval1D | undefined = undefined;
 	#initialized: boolean = false;
@@ -71,26 +68,25 @@ export class Histogram extends MosaicClient implements Mark {
 		});
 	}
 
-	override fields(): Array<FieldRequest> {
-		return [
-			{
-				table: this.#source.table,
-				column: this.#source.column,
-				stats: ["min", "max"],
-			},
-		];
-	}
-
-	override fieldInfo(info: Array<FieldInfo>) {
+	override async prepare(): Promise<void> {
+		const info = await queryFieldInfo(
+			this.coordinator!,
+			[
+				{
+					table: this.#source.table,
+					column: this.#source.column,
+					stats: ["min", "max"],
+				},
+			],
+		);
 		this.#fieldInfo = info[0];
-		return this;
 	}
 	/**
 	 * Return a query specifying the data needed by this Mark client.
 	 * @param filter The filtering criteria to apply in the query.
 	 * @returns The client query
 	 */
-	override query(filter: Array<SQLExpression> = []): Query {
+	override query(filter: Array<ExprNode> = []): Query {
 		return Query
 			.from({ source: this.#source.table })
 			.select(this.#select)
@@ -128,7 +124,7 @@ export class Histogram extends MosaicClient implements Mark {
 	/* Required by the Mark interface */
 	type = "rectY";
 	/** Required by `mplot.bin` to get the field info. */
-	channelField(channel: string): FieldInfo {
+	channelField(channel: string) {
 		assert(channel === "x");
 		assert(this.#fieldInfo, "No field info yet");
 		return this.#fieldInfo;

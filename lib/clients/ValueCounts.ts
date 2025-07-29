@@ -1,12 +1,15 @@
-// @ts-types="../deps/mosaic-core.d.ts";
-import { clausePoint, MosaicClient, type Selection } from "@uwdata/mosaic-core";
-// @ts-types="../deps/mosaic-sql.d.ts";
+import {
+	clausePoint,
+	MosaicClient,
+	type Selection,
+	type SelectionClause,
+} from "@uwdata/mosaic-core";
 import {
 	column,
 	count,
+	type ExprNode,
 	Query,
 	sql,
-	type SQLExpression,
 	sum,
 } from "@uwdata/mosaic-sql";
 import type * as flech from "@uwdata/flechette";
@@ -38,25 +41,9 @@ export class ValueCounts extends MosaicClient {
 		this.#table = options.table;
 		this.#column = options.field.name;
 		this.#field = options.field;
-
-		// FIXME: There is some issue with the mosaic client or the query we
-		// are using here. Updates to the Selection (`filterBy`) seem to be
-		// missed by the coordinator, and query/queryResult are not called
-		// by the coordinator when the filterBy is updated.
-		//
-		// Here we manually listen for the changes to filterBy and update this
-		// client internally. It _should_ go through the coordinator.
-		options.filterBy.addEventListener("value", async () => {
-			let filters = options.filterBy.predicate();
-			let query = this.query(filters);
-			if (this.#plot) {
-				let data = await this.coordinator.query(query);
-				this.#plot.data.value = data;
-			}
-		});
 	}
 
-	override query(filter: Array<SQLExpression> = []): Query {
+	override query(filter: Array<ExprNode> = []): Query {
 		let counts = Query
 			.from({ source: this.#table })
 			.select({
@@ -89,7 +76,7 @@ export class ValueCounts extends MosaicClient {
 			this.#el.appendChild(plot);
 			effect(() => {
 				let clause = this.clause(plot.selected.value);
-				this.filterBy!.update(clause);
+				this.filterBy?.update(clause);
 			});
 		} else {
 			this.#plot.data.value = data;
@@ -97,7 +84,7 @@ export class ValueCounts extends MosaicClient {
 		return this;
 	}
 
-	clause<T>(value?: T) {
+	clause<T>(value?: T): SelectionClause {
 		let update = value === "__quak_null__" ? null : value;
 		return clausePoint(this.#column, update, {
 			source: this,

@@ -1,5 +1,4 @@
 import { effect, signal } from "@preact/signals-core";
-// @ts-types="npm:@types/d3@7"
 import * as d3 from "d3";
 import { assert } from "../utils/assert.ts";
 import { tickFormatterForBins } from "./tick-formatter-for-bins.ts";
@@ -236,17 +235,28 @@ export function CrossfilterHistogramPlot(
 			.attr("height", y(0) - y(nullCount));
 	}
 
+	// Wrap d3 scales to match Observable Plot's scale interface
+	// which expects domain and range as properties, not methods
+	function wrapScale(
+		scale: d3.ScaleTime<number, number> | d3.ScaleLinear<number, number>,
+		scaleType: "time" | "linear",
+	) {
+		return Object.assign(
+			(value: number) => scale(value),
+			{
+				...scale,
+				type: scaleType,
+				domain: scale.domain(),
+				range: scale.range(),
+				apply: scale,
+				invert: scale.invert?.bind(scale),
+			},
+		);
+	}
+
 	let scales = {
-		x: Object.assign(x, {
-			type: "linear",
-			domain: x.domain(),
-			range: x.range(),
-		}),
-		y: Object.assign(y, {
-			type: "linear",
-			domain: y.domain(),
-			range: y.range(),
-		}),
+		x: wrapScale(x, type === "date" ? "time" : "linear"),
+		y: wrapScale(y, "linear"),
 	};
 	let node = svg.node();
 	assert(node, "Infallable");
@@ -315,17 +325,16 @@ export function CrossfilterHistogramPlot(
 
 	render(bins, nullCount);
 	return Object.assign(node, {
-		/** @param {string} type */
 		scale(type: string) {
+			// For faceted scales, return undefined since this is not a faceted plot
+			if (type === "fx" || type === "fy") {
+				return undefined;
+			}
 			// @ts-expect-error - scales is not defined
 			let scale = scales[type];
-			assert(scale, "Invalid scale type");
+			assert(scale, `Invalid scale type ${type}`);
 			return scale;
 		},
-		/**
-		 * @param {Array<Bin>} bins
-		 * @param {{ nullCount: number }} opts
-		 */
 		update(bins: Array<Bin>, { nullCount }: { nullCount: number }) {
 			render(bins, nullCount);
 		},

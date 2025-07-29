@@ -1,14 +1,17 @@
 import * as flech from "@uwdata/flechette";
-// @ts-types="../deps/mosaic-core.d.ts"
 import {
 	type Coordinator,
-	type FieldInfo,
-	type FieldRequest,
 	MosaicClient,
+	queryFieldInfo,
 	Selection,
 } from "@uwdata/mosaic-core";
-// @ts-types="../deps/mosaic-sql.d.ts"
-import { desc, Query, type SQLExpression } from "@uwdata/mosaic-sql";
+import {
+	asc,
+	desc,
+	type FilterExpr,
+	Query,
+	type SelectQuery,
+} from "@uwdata/mosaic-sql";
 import * as signals from "@preact/signals-core";
 import { html } from "htl";
 
@@ -55,7 +58,8 @@ export async function datatable(
 			.from(table)
 			.select(options.columns ?? ["*"])
 			.limit(0),
-	);
+		{ type: "arrow" },
+	) as flech.Table;
 	let client = new DataTable({
 		table,
 		schema: empty.schema,
@@ -156,17 +160,6 @@ export class DataTable extends MosaicClient {
 		return this.#sql;
 	}
 
-	/**
-	 * Mosaic function. Client defines the fields to be requested from the coordinator.
-	 */
-	override fields(): Array<FieldRequest> {
-		return this.#columns.map((column) => ({
-			table: this.#meta.table,
-			column,
-			stats: [],
-		}));
-	}
-
 	node(): HTMLElement {
 		return this.#root;
 	}
@@ -187,10 +180,10 @@ export class DataTable extends MosaicClient {
 	 * @param filter - The filter predicates to apply to the query
 	 * @returns The query to be executed
 	 */
-	override query(filter: Array<unknown> = []): Query {
+	override query(filter?: FilterExpr | null | undefined): SelectQuery {
 		let query = Query.from(this.#meta.table)
 			.select(this.#columns)
-			.where(filter)
+			.where(filter ?? [])
 			.orderby(
 				this.#orderby
 					.filter((o) => o.order !== "unset")
@@ -227,7 +220,7 @@ export class DataTable extends MosaicClient {
 	/**
 	 * Mosaic lifecycle function called after `queryResult`
 	 */
-	update(): this {
+	override update(): this {
 		if (!this.#pendingInternalRequest) {
 			// on the first update, populate the table with initial data
 			this.#appendRows(this.#rows * 2);
@@ -244,13 +237,18 @@ export class DataTable extends MosaicClient {
 		this.requestQuery(query);
 
 		// prefetch subsequent data batch
-		this.coordinator.prefetch(query.clone().offset(offset + this.#limit));
+		this.coordinator!.prefetch(query.clone().offset(offset + this.#limit));
 	}
 
-	/**
-	 * Mosaic lifecycle function called when the client is connected to a coordinator.
-	 */
-	override fieldInfo(infos: Array<FieldInfo>): this {
+	override async prepare(): Promise<void> {
+		const infos = await queryFieldInfo(
+			this.coordinator!,
+			this.#columns.map((column) => ({
+				table: this.#meta.table,
+				column,
+				stats: [],
+			})),
+		);
 		let classes = classof(this.#meta.schema);
 
 		{
@@ -258,7 +256,7 @@ export class DataTable extends MosaicClient {
 				table: this.#meta.table,
 				filterBy: this.filterBy,
 			});
-			this.coordinator.connect(statusBar);
+			this.coordinator!.connect(statusBar);
 			this.#shadowRoot.querySelector(".quak")?.appendChild(
 				statusBar.node(),
 			);
@@ -290,7 +288,7 @@ export class DataTable extends MosaicClient {
 				});
 			}
 			let th = thcol(field, this.#columnWidth, vis);
-			this.coordinator.connect(vis);
+			this.coordinator!.connect(vis);
 			return th;
 		});
 
@@ -334,8 +332,6 @@ export class DataTable extends MosaicClient {
 				}
 			});
 		}
-
-		return this;
 	}
 
 	/** Number of rows to append */
@@ -555,23 +551,6 @@ function shouldGrayoutValue(value: string) {
 		value === "NaN" ||
 		value === "TODO"
 	);
-}
-
-/**
- * A mosaic SQL expression for ascending order
- *
- * The normal behavior in SQL is to sort nulls first when sorting in ascending order.
- * This function returns an expression that sorts nulls last (i.e., `NULLS LAST`),
- * like the `desc` function.
- *
- * @param field
- */
-function asc(field: string): SQLExpression {
-	// doesn't sort nulls for asc
-	let expr = desc(field);
-	// @ts-expect-error - private field
-	expr._expr[0] = expr._expr[0].replace("DESC", "ASC");
-	return expr;
 }
 
 /**
