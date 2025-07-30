@@ -1,11 +1,5 @@
-import * as flech from "@uwdata/flechette";
-// @ts-types="../deps/mosaic-core.d.ts"
-import {
-	type Interactor,
-	MosaicClient,
-	type Selection,
-} from "@uwdata/mosaic-core";
-// @ts-types="../deps/mosaic-sql.d.ts"
+import type * as flech from "@uwdata/flechette";
+import { MosaicClient, type Selection } from "@uwdata/mosaic-core";
 import { count, Query } from "@uwdata/mosaic-sql";
 import { assert } from "../utils/assert.ts";
 
@@ -35,18 +29,7 @@ export class StatusBar extends MosaicClient {
 		this.#el.classList.add("status-bar");
 
 		this.#button.addEventListener("mousedown", () => {
-			if (!this.filterBy) return;
-			// TODO: A better way to do this?
-			// We want to clear all the existing selections
-			// @see https://github.com/uwdata/mosaic/blob/8e63149753e7d6ca30274c032a04744e14df2fd6/packages/core/src/Selection.js#L265-L272
-			for (let { source } of this.filterBy.clauses) {
-				if (!isInteractor(source)) {
-					console.warn("Skipping non-interactor source", source);
-					continue;
-				}
-				source.reset();
-				this.filterBy.update(source.clause());
-			}
+			this.filterBy?.reset();
 		});
 
 		this.#button.style.visibility = "hidden";
@@ -61,21 +44,17 @@ export class StatusBar extends MosaicClient {
 	}
 
 	override query(filter = []) {
-		let query = Query.from(this.#table)
+		return Query.from(this.#table)
 			.select({ count: count() })
 			.where(filter);
-		return query;
 	}
 
 	override queryResult(table: flech.Table) {
+		let count: unknown = table.get(0)?.count ?? 0;
 		assert(
-			isNumericArrowField(
-				table.schema.fields.find((f) => f.name === "count"),
-			),
-			"Expected count field to be an integer or float",
+			typeof count === "number" && !Number.isNaN(count),
+			"Got NaN for count.",
 		);
-
-		let count = Number(table.get(0)?.count ?? 0);
 		if (!this.#totalRows) {
 			// we need to know the total number of rows to display
 			this.#totalRows = count;
@@ -93,19 +72,4 @@ export class StatusBar extends MosaicClient {
 	node() {
 		return this.#el;
 	}
-}
-
-function isObject(x: unknown): x is Record<string, unknown> {
-	return typeof x === "object" && x !== null && !Array.isArray(x);
-}
-
-function isInteractor(x: unknown): x is Interactor {
-	return isObject(x) && "clause" in x && "reset" in x;
-}
-
-function isNumericArrowField(field?: flech.Field) {
-	return (
-		field?.type.typeId === flech.Type.Int ||
-		field?.type.typeId === flech.Type.Float
-	);
 }

@@ -1,5 +1,5 @@
-// @ts-types="./deps/mosaic-core.d.ts";
 import type { FieldInfo } from "@uwdata/mosaic-core";
+import type { ScaleLinear } from "d3";
 
 export interface Bin {
 	x0: number;
@@ -23,7 +23,7 @@ export type Scale<Range, Output> =
 		constant?: number;
 		exponent?: number;
 	}
-	& import("npm:@types/d3-scale@4.0.8").ScaleLinear<Range, Output>;
+	& ScaleLinear<Range, Output>;
 
 /**
  * A stub of the `vgplot.Mark` class.

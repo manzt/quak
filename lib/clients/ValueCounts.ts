@@ -1,12 +1,16 @@
-// @ts-types="../deps/mosaic-core.d.ts";
-import { clausePoint, MosaicClient, type Selection } from "@uwdata/mosaic-core";
-// @ts-types="../deps/mosaic-sql.d.ts";
+import {
+	clausePoint,
+	MosaicClient,
+	type Selection,
+	type SelectionClause,
+} from "@uwdata/mosaic-core";
 import {
 	column,
 	count,
+	type ExprNode,
+	type MaybeArray,
 	Query,
 	sql,
-	type SQLExpression,
 	sum,
 } from "@uwdata/mosaic-sql";
 import type * as flech from "@uwdata/flechette";
@@ -14,6 +18,7 @@ import { effect } from "@preact/signals-core";
 
 import { ValueCountsPlot } from "../utils/ValueCountsPlot.ts";
 import { assert } from "../utils/assert.ts";
+import { isFlechetteTable } from "../utils/guards.ts";
 
 interface UniqueValuesOptions {
 	/** The table to query. */
@@ -47,16 +52,22 @@ export class ValueCounts extends MosaicClient {
 		// Here we manually listen for the changes to filterBy and update this
 		// client internally. It _should_ go through the coordinator.
 		options.filterBy.addEventListener("value", async () => {
-			let filters = options.filterBy.predicate();
-			let query = this.query(filters);
-			if (this.#plot) {
-				let data = await this.coordinator.query(query);
-				this.#plot.data.value = data;
+			if (!this.#plot || !this.coordinator) {
+				return;
 			}
+			let filters = options.filterBy.predicate(this);
+			assert(
+				isExprNodeArray(filters),
+				`Filter is not expression array: ${filters}`,
+			);
+			let query = this.query(filters);
+			let data = await this.coordinator.query(query);
+			assert(isFlechetteTable(data), "Expected a flechette table.");
+			this.#plot.data.value = data;
 		});
 	}
 
-	override query(filter: Array<SQLExpression> = []): Query {
+	override query(filter: Array<ExprNode> = []): Query {
 		let counts = Query
 			.from({ source: this.#table })
 			.select({
@@ -89,7 +100,7 @@ export class ValueCounts extends MosaicClient {
 			this.#el.appendChild(plot);
 			effect(() => {
 				let clause = this.clause(plot.selected.value);
-				this.filterBy!.update(clause);
+				this.filterBy?.update(clause);
 			});
 		} else {
 			this.#plot.data.value = data;
@@ -97,7 +108,7 @@ export class ValueCounts extends MosaicClient {
 		return this;
 	}
 
-	clause<T>(value?: T) {
+	clause<T>(value?: T): SelectionClause {
 		let update = value === "__quak_null__" ? null : value;
 		return clausePoint(this.#column, update, {
 			source: this,
@@ -114,4 +125,10 @@ export class ValueCounts extends MosaicClient {
 			node: () => this.#el,
 		};
 	}
+}
+
+function isExprNodeArray(
+	x: MaybeArray<string | boolean | undefined | ExprNode>,
+): x is Array<ExprNode> {
+	return Array.isArray(x) && x.every((y) => typeof y === "object");
 }

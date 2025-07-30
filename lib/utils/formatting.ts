@@ -276,14 +276,16 @@ function instantFromTimeUnit(
 ) {
 	switch (unit) {
 		case flech.TimeUnit.SECOND:
+			// Convert seconds to milliseconds
 			if (typeof value === "bigint") value = Number(value);
-			return Temporal.Instant.fromEpochSeconds(value);
+			return Temporal.Instant.fromEpochMilliseconds(value * 1000);
 		case flech.TimeUnit.MILLISECOND:
 			if (typeof value === "bigint") value = Number(value);
 			return Temporal.Instant.fromEpochMilliseconds(value);
 		case flech.TimeUnit.MICROSECOND:
+			// Convert microseconds to nanoseconds
 			if (typeof value === "number") value = BigInt(value);
-			return Temporal.Instant.fromEpochMicroseconds(value);
+			return Temporal.Instant.fromEpochNanoseconds(value * 1000n);
 		case flech.TimeUnit.NANOSECOND:
 			if (typeof value === "number") value = BigInt(value);
 			return Temporal.Instant.fromEpochNanoseconds(value);

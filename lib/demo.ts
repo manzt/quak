@@ -1,5 +1,3 @@
-/// <reference types="npm:vite/client" />
-// @ts-types="./deps/mosaic-core.d.ts";
 import * as mc from "@uwdata/mosaic-core";
 import * as msql from "@uwdata/mosaic-sql";
 
@@ -110,7 +108,7 @@ async function getUrl(
 		}
 	}
 	assert(fileType === "parquet", "Unsupported file type.");
-	return msql.loadParquet(tableName, source, { replace: true });
+	return msql.loadParquet(tableName, source.toString(), { replace: true });
 }
 
 async function getFile(
