@@ -9,6 +9,8 @@ import { DataTable } from "./clients/DataTable.ts";
 import { assert } from "./utils/assert.ts";
 import { defer } from "./utils/defer.ts";
 
+import type * as aw from "npm:@anywidget/types@0.2.0";
+
 type Model = {
 	_table_name: string;
 	_columns: Array<string>;
@@ -25,14 +27,8 @@ interface OpenQuery {
 
 export default () => {
 	let coordinator = new mc.Coordinator();
-	let schema: flech.Schema;
-
 	return {
-		async initialize(
-			{ model }: import("npm:@anywidget/types@0.2.0").InitializeProps<
-				Model
-			>,
-		) {
+		initialize({ model }: aw.InitializeProps<Model>) {
 			let logger = coordinator.logger(_voidLogger());
 			let getDataCubeSchema = () => model.get("data_cube_schema");
 			let openQueries = new Map<string, OpenQuery>();
@@ -110,23 +106,17 @@ export default () => {
 				coordinator.dataCubeIndexer.schema = getDataCubeSchema();
 			});
 
-			schema = await getTableSchema(coordinator, {
-				tableName: model.get("_table_name"),
-				columns: model.get("_columns"),
-			});
-
 			return () => {
 				coordinator.clear();
 			};
 		},
-		render(
-			{ model, el }: import("npm:@anywidget/types@0.2.0").RenderProps<
-				Model
-			>,
-		) {
+		async render({ model, el }: aw.RenderProps<Model>) {
 			let table = new DataTable({
 				table: model.get("_table_name"),
-				schema: schema,
+				schema: await getTableSchema(coordinator, {
+					tableName: model.get("_table_name"),
+					columns: model.get("_columns"),
+				}),
 			});
 			coordinator.connect(table);
 			table.sql.subscribe((sql) => {
