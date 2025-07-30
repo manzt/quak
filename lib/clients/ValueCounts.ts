@@ -68,16 +68,20 @@ export class ValueCounts extends MosaicClient {
 	}
 
 	override query(filter: Array<ExprNode> = []): Query {
+		let col = column(this.#column);
 		let counts = Query
 			.from({ source: this.#table })
 			.select({
 				value: sql`CASE
-					WHEN ${column(this.#column)} IS NULL THEN '__quak_null__'
-					ELSE ${column(this.#column)}
+					WHEN ${col} IS NULL THEN '__quak_null__'
+					ELSE CAST(${col} AS VARCHAR)
 				END`,
 				count: count(),
 			})
-			.groupby("value")
+			.groupby(sql`CASE
+				WHEN ${col} IS NULL THEN '__quak_null__'
+				ELSE CAST(${col} AS VARCHAR)
+			END`)
 			.where(filter);
 		return Query
 			.with({ counts })
