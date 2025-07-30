@@ -1,9 +1,7 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 jobs:
   release:
@@ -18,15 +16,7 @@ jobs:
       - uses: denoland/setup-deno@v1
         with:
           deno-version: v2.x
-      - uses: astral-sh/setup-uv@v3
-        with:
-          version: "0.5.x"
-
+      - uses: astral-sh/setup-uv@v6
       - run: uv build
-
       - name: Publish distribution 📦 to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
-      - run: npx changelogithub@0.13
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
