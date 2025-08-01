@@ -106,7 +106,8 @@ export class DataTable extends MosaicClient {
 	/** @type {AsyncBatchReader<flech.StructRowProxy> | null} */
 	#reader: AsyncBatchReader<TableRow> | null = null;
 
-	#sql = signal(undefined as string | undefined);
+	/** The active SQL query */
+	#sql: signals.Signal<string | undefined> = signal();
 
 	constructor(source: DataTableOptions) {
 		super(Selection.crossfilter());
@@ -371,11 +372,11 @@ export class DataTable extends MosaicClient {
 	}
 }
 
-const TRUNCATE = /** @type {const} */ ({
+const TRUNCATE = {
 	whiteSpace: "nowrap",
 	overflow: "hidden",
 	textOverflow: "ellipsis",
-});
+} as const;
 
 function thcol(
 	field: flech.Field,
