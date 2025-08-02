@@ -30,6 +30,8 @@ interface DataTableOptions {
 	table: string;
 	schema: flech.Schema;
 	height?: number;
+	getColumnLabel?: (field: flech.Field) => string;
+	getColumnWidth?: (field: flech.Field) => number;
 }
 
 // TODO: more
@@ -44,6 +46,8 @@ type TableRow = Record<string, unknown>;
  * @param options.coordinator - The mosaic coordinator to connect to.
  * @param options.height - The height of the table in pixels (default: 11.5 rows).
  * @param options.columns - The columns to display in the table (default: all columns).
+ * @param options.getColumnLabel - Custom formatter for column headers.
+ * @param options.getColumnWidth - Custom function to determine column widths.
  */
 export async function datatable(
 	table: string,
@@ -51,6 +55,8 @@ export async function datatable(
 		coordinator: Coordinator;
 		height?: number;
 		columns?: Array<string>;
+		getColumnLabel?: (field: flech.Field) => string;
+		getColumnWidth?: (field: flech.Field) => number;
 	},
 ): Promise<DataTable> {
 	assert(options.coordinator, "Must provide a coordinator");
@@ -66,6 +72,8 @@ export async function datatable(
 		table,
 		schema: empty.schema,
 		height: options.height,
+		getColumnLabel: options.getColumnLabel,
+		getColumnWidth: options.getColumnWidth,
 	});
 	options.coordinator.connect(client);
 	return client;
@@ -102,6 +110,10 @@ export class DataTable extends MosaicClient {
 	#headerHeight: string = "94px";
 	/** the formatter for the data table entries */
 	#format: Record<string, (value: unknown) => string>;
+	/** custom column header formatter */
+	#getColumnLabel?: (field: flech.Field) => string;
+	/** custom column width calculator */
+	#getColumnWidth?: (field: flech.Field) => number;
 
 	/** @type {AsyncBatchReader<flech.StructRowProxy> | null} */
 	#reader: AsyncBatchReader<TableRow> | null = null;
@@ -113,6 +125,8 @@ export class DataTable extends MosaicClient {
 		super(Selection.crossfilter());
 		this.#format = formatof(source.schema);
 		this.#meta = source;
+		this.#getColumnLabel = source.getColumnLabel;
+		this.#getColumnWidth = source.getColumnWidth;
 
 		let maxHeight = `${(this.#rows + 1) * this.#rowHeight - 1}px`;
 		// if maxHeight is set, calculate the number of rows to display
@@ -290,7 +304,8 @@ export class DataTable extends MosaicClient {
 					filterBy: this.filterBy!,
 				});
 			}
-			let th = thcol(field, this.#columnWidth, vis);
+			let columnWidth = this.#getColumnWidth?.(field) ?? this.#columnWidth;
+			let th = thcol(field, columnWidth, vis, this.#getColumnLabel);
 			this.coordinator!.connect(vis);
 			return th;
 		});
@@ -382,6 +397,7 @@ function thcol(
 	field: flech.Field,
 	minWidth: number,
 	vis?: ColumnSummaryClient,
+	getColumnLabel?: (field: flech.Field) => string,
 ) {
 	let buttonVisible = signals.signal(false);
 	let width = signals.signal(minWidth);
@@ -414,7 +430,7 @@ function thcol(
 	// @deno-fmt-ignore
 	let th: HTMLTableCellElement = html`<th style=${{ overflow: "hidden" }}>
 		<div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${field.name}</span>
+			<span style=${{ marginBottom: "5px", maxWidth: "250px", ...TRUNCATE }}>${getColumnLabel?.(field) ?? field.name}</span>
 			${sortButton}
 		</div>
 		${verticalResizeHandle}
