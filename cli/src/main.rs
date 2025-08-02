@@ -76,8 +76,29 @@ fn main() -> Result<()> {
         .build(&event_loop)
         .unwrap();
 
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android"
+    ))]
+    let builder = WebViewBuilder::new(&window);
+
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android"
+    )))]
+    let builder = {
+        use tao::platform::unix::WindowExtUnix;
+        use wry::WebViewBuilderExtUnix;
+        let vbox = window.default_vbox().unwrap();
+        WebViewBuilder::new_gtk(vbox)
+    }; 
+
     let current_query_clone = Arc::clone(&current_query);
-    let _webview = WebViewBuilder::new(&window)
+    let _webview = builder
         .with_devtools(true)
         .with_asynchronous_custom_protocol("quak".into(), move |request, responder| {
             responder.respond(
