@@ -70,11 +70,21 @@ def arrow_table_from_ipc(data: bytes | memoryview) -> pa.lib.Table:
     return feather.read_table(io.BytesIO(data))
 
 
-def table_to_ipc(table: pa.lib.Table) -> memoryview:
-    """Convert a pyarrow Table to an Arrow IPC message."""
+def table_to_ipc(table: pa.lib.Table | pa.lib.RecordBatch | pa.lib.RecordBatchReader) -> memoryview:
+    """Convert Arrow tabular data to an Arrow IPC message."""
     import io
 
+    import pyarrow as pa
     import pyarrow.feather as feather
+
+    if isinstance(table, pa.RecordBatchReader):
+        table = table.read_all()
+    elif isinstance(table, pa.RecordBatch):
+        table = pa.Table.from_batches([table], schema=table.schema)
+    elif not isinstance(table, pa.Table):
+        raise TypeError(
+            f"Expected a pyarrow Table, RecordBatch, or RecordBatchReader, got {type(table)!r}"
+        )
 
     sink = io.BytesIO()
     feather.write_feather(table, sink, compression="uncompressed")
