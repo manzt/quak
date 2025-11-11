@@ -47,7 +47,8 @@
 	"lint": {
 		"rules": {
 			"exclude": [
-				"prefer-const"
+				"prefer-const",
+				"no-import-prefix"
 			]
 		}
 	}
