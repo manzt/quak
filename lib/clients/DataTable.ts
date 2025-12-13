@@ -7,6 +7,7 @@ import {
 } from "@uwdata/mosaic-core";
 import {
 	asc,
+	column,
 	desc,
 	type FilterExpr,
 	Query,
@@ -57,7 +58,9 @@ export async function datatable(
 	let empty = await options.coordinator.query(
 		Query
 			.from(table)
-			.select(options.columns ?? ["*"])
+			.select(options.columns?.map( columnName => {
+				return column(columnName, undefined);
+			}) ?? ["*"])
 			.limit(0),
 		{ type: "arrow" },
 	);
@@ -176,6 +179,11 @@ export class DataTable extends MosaicClient {
 	get #columns() {
 		return this.#meta.schema.fields.map((field) => field.name);
 	}
+	get #columnsAsNodes() {
+		return this.#meta.schema.fields.map((field) => {
+			return column(field.name, undefined);
+		});
+	}
 
 	/**
 	 * Mosaic function. Client defines the query to be executed by the coordinator.
@@ -185,7 +193,7 @@ export class DataTable extends MosaicClient {
 	 */
 	override query(filter?: FilterExpr | null | undefined): SelectQuery {
 		let query = Query.from(this.#meta.table)
-			.select(this.#columns)
+			.select(this.#columnsAsNodes)
 			.where(filter ?? [])
 			.orderby(
 				this.#orderby
@@ -246,9 +254,9 @@ export class DataTable extends MosaicClient {
 	override async prepare(): Promise<void> {
 		const infos = await queryFieldInfo(
 			this.coordinator!,
-			this.#columns.map((column) => ({
+			this.#columns.map((column_name) => ({
 				table: this.#meta.table,
-				column,
+				column: column(column_name, undefined),
 				stats: [],
 			})),
 		);
@@ -272,7 +280,7 @@ export class DataTable extends MosaicClient {
 		</tr>`;
 
 		let cols = this.#meta.schema.fields.map((field) => {
-			let info = infos.find((c) => c.column === field.name);
+			let info = infos.find((c) => c.column === `"${field.name}"`);
 			assert(info, `No info for column ${field.name}`);
 			let vis: ColumnSummaryClient | undefined = undefined;
 			if (info.type === "number" || info.type === "date") {
