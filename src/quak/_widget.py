@@ -32,11 +32,26 @@ class Widget(anywidget.AnyWidget):
     _esm = pathlib.Path(__file__).parent / "widget.js"
     _table_name = traitlets.Unicode().tag(sync=True)
     _columns = traitlets.List(traitlets.Unicode()).tag(sync=True)
+    _column_labels = traitlets.Dict(
+        key_trait=traitlets.Unicode(),
+        value_trait=traitlets.Unicode(),
+    ).tag(sync=True)
+    _column_widths = traitlets.Dict(
+        key_trait=traitlets.Unicode(),
+        value_trait=traitlets.Float(),
+    ).tag(sync=True)
 
     # The SQL query for the current data (read-only)
     sql = traitlets.Unicode().tag(sync=True)
 
-    def __init__(self, data, *, table: str = "df"):
+    def __init__(
+        self,
+        data,
+        *,
+        table: str = "df",
+        column_labels: dict[str, str] | None = None,
+        column_widths: dict[str, float] | None = None,
+    ):
         if isinstance(data, duckdb.DuckDBPyConnection):
             conn = data
         else:
@@ -68,6 +83,8 @@ class Widget(anywidget.AnyWidget):
         super().__init__(
             _table_name=table,
             _columns=get_columns(conn, table),
+            _column_labels=column_labels or {},
+            _column_widths=column_widths or {},
             sql=f'SELECT * FROM "{table}"',
         )
         self.on_msg(self._handle_custom_msg)
