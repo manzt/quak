@@ -58,9 +58,11 @@ export async function datatable(
 	let empty = await options.coordinator.query(
 		Query
 			.from(table)
-			.select(options.columns?.map( columnName => {
-				return column(columnName, undefined);
-			}) ?? ["*"])
+			.select(
+				options.columns?.map((columnName) => {
+					return column(columnName, undefined);
+				}) ?? ["*"],
+			)
 			.limit(0),
 		{ type: "arrow" },
 	);
