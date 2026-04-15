@@ -45,6 +45,7 @@ export function CrossfilterHistogramPlot(
 ): SVGSVGElement & {
 	scale: (type: string) => Scale<number, number>;
 	update(bins: Array<Bin>, opts: { nullCount: number }): void;
+	reset(): void;
 } {
 	const fieldType = formatDataType(field.type);
 	const total = bins.reduce((sum, bin) => sum + bin.length, 0);

@@ -121,6 +121,11 @@ export class Histogram extends MosaicClient implements Mark {
 		return this;
 	}
 
+	reset() {
+		this.#interval?.reset();
+		this.svg?.reset();
+	}
+
 	/* Required by the Mark interface */
 	type = "rectY";
 	/** Required by `mplot.bin` to get the field info. */

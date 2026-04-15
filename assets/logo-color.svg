@@ -6,8 +6,7 @@
 	viewBox="0 0 508.28 374.25"
 >
 	<defs>
-		<style>
-		.cls-1 {
+		<style>.cls-1 {
 			fill: #fe7f03;
 		}
 
@@ -21,8 +20,7 @@
 
 		.cls-3 {
 			fill: #fff;
-		}
-		</style>
+		}</style>
 	</defs>
 	<g id="Layer_1-2" data-name="Layer 1">
 		<path

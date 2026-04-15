@@ -254,6 +254,16 @@ export class DataTable extends MosaicClient {
 	}
 
 	override async prepare(): Promise<void> {
+		// Workaround for mosaic-core bug: PreAggregator doesn't clear its cache
+		// when a selection is cleared (predicate becomes null). This causes stale
+		// materialized view data to be served on deselect. We listen for selection
+		// updates and clear the cache when the active clause has no predicate.
+		this.filterBy?.addEventListener("value", () => {
+			if (this.filterBy?.clauses.active?.predicate == null) {
+				this.coordinator?.preaggregator.clear();
+			}
+		});
+
 		const infos = await queryFieldInfo(
 			this.coordinator!,
 			this.#columns.map((column_name) => ({
