@@ -6,8 +6,7 @@
 	viewBox="0 0 166.87 121.85"
 >
 	<defs>
-		<style>
-		.cls-1 {
+		<style>.cls-1 {
 			fill: #000;
 			stroke-width: 0px;
 		}
@@ -21,8 +20,7 @@
 			stroke: #000;
 			stroke-miterlimit: 10;
 			stroke-width: 6px;
-		}
-		</style>
+		}</style>
 	</defs>
 	<g id="Layer_1-2" data-name="Layer 1">
 		<g>
