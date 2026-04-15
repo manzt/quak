@@ -12,6 +12,8 @@ import { isFlechetteTable } from "./utils/guards.ts";
 type Model = {
 	_table_name: string;
 	_columns: Array<string>;
+	_column_labels: Record<string, string>;
+	_column_widths: Record<string, number>;
 	sql: string;
 };
 
@@ -106,6 +108,8 @@ export default () => {
 					tableName: model.get("_table_name"),
 					columns: model.get("_columns"),
 				}),
+				getColumnLabel: (field) => model.get("_column_labels")[field.name],
+				getColumnWidth: (field) => model.get("_column_widths")[field.name],
 			});
 			coordinator.connect(table);
 			table.sql.subscribe((sql) => {
