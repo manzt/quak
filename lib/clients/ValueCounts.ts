@@ -89,10 +89,24 @@ export class ValueCounts extends MosaicClient {
 	}
 
 	clause<T>(value?: T): SelectionClause {
-		let update = value === "__quak_null__" ? null : value;
-		return clausePoint(this.#column, update, {
-			source: this,
-		});
+		if (value === "__quak_unique__") {
+			return {
+				source: this,
+				value: undefined,
+				predicate: sql`${column(this.#column)} IN (
+				SELECT ${column(this.#column)}
+				FROM ${this.#table}
+				GROUP BY ${column(this.#column)}
+				HAVING COUNT(*) = 1
+			)`,
+			};
+		}
+
+		return clausePoint(
+			this.#column,
+			value === "__quak_null__" ? null : value,
+			{ source: this },
+		);
 	}
 
 	reset() {
