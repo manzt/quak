@@ -5,9 +5,11 @@
 	"license": "MIT",
 	"tasks": {
 		"dev": "deno run -A --node-modules-dir npm:esbuild --bundle --minify --loader:.css=text --format=esm --outfile=src/quak/widget.js lib/widget.ts --sourcemap=inline --watch",
-		"build": "deno run -A --node-modules-dir npm:esbuild --bundle --minify --loader:.css=text --format=esm --outfile=src/quak/widget.js lib/widget.ts",
+		"build": "deno task build:widget && deno task build:embed",
+		"build:widget": "deno run -A --node-modules-dir npm:esbuild --bundle --minify --loader:.css=text --format=esm --outfile=src/quak/widget.js lib/widget.ts",
+		"build:embed": "deno run -A --node-modules-dir npm:esbuild --bundle --minify --loader:.css=text --format=esm --outfile=cli/src/static/widget.js lib/embed.ts",
 		"vite": "deno run -A --node-modules-dir npm:vite",
-		"check": "deno check lib/widget.ts"
+		"check": "deno check lib/widget.ts lib/embed.ts"
 	},
 	"nodeModulesDir": "auto",
 	"compilerOptions": {

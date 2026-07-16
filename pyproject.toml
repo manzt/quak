@@ -2,8 +2,14 @@
 name = "quak"
 version = "0.3.5"
 readme = "README.md"
-requires-python = ">=3.8"
-dependencies = ["anywidget>=0.9.0", "duckdb>=1.0.0", "pyarrow>=16.0.0"]
+requires-python = ">=3.12"
+dependencies = [
+  "anywidget>=0.11.0",
+  "boro>=0.0.0",
+  "duckdb>=1.0.0",
+  "pyarrow>=16.0.0",
+  "signals>=0.1.0a7",
+]
 
 [dependency-groups]
 dev = [
@@ -47,3 +53,9 @@ select = [
 
 [tool.uv]
 required-version = ">=0.8.0"
+
+[tool.uv.sources]
+# quak needs boro's (unreleased) child-identity API — the ctx.child scopes
+# landed 2026-07-16. Drop this once boro cuts a release and the dependency
+# above can pin it.
+boro = { path = "../boro", editable = true }
