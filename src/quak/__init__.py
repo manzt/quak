@@ -1,12 +1,12 @@
 """An anywidget for data that talks like a duck."""
 
-from typing import Callable
+from collections.abc import Callable
 
 from ._util import has_pycapsule_stream_interface
 from ._version import __version__
-from ._widget import Widget
+from ._widget import ColumnHandle, DataTable, Widget
 
-__all__ = ["Widget", "__version__"]
+__all__ = ["ColumnHandle", "DataTable", "Widget", "__version__"]
 
 
 def default_formatter(obj: object) -> object:
@@ -22,7 +22,7 @@ def default_formatter(obj: object) -> object:
         or is_arrow_ipc(obj)
         or is_dataframe_api_obj(obj)
     ):
-        obj = Widget(obj)
+        obj = DataTable(obj)
     return obj
 
 

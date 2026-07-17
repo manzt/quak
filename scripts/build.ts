@@ -38,10 +38,15 @@ let denoJson = await Deno
 	.readTextFile(new URL("deno.json", root))
 	.then(JSON.parse);
 
-let options: esbuild.BuildOptions = {
+let entries: Array<esbuild.BuildOptions> = [
+	// the anywidget (boro client) — mosaic comes from the coordinator at runtime
+	{ entryPoints: ["./lib/widget.ts"], outfile: "./src/quak/widget.js" },
+	// the standalone CLI/static bundle — self-contained mosaic client
+	{ entryPoints: ["./lib/embed.ts"], outfile: "./cli/src/static/widget.js" },
+];
+
+let shared: esbuild.BuildOptions = {
 	alias: mapImports(denoJson.imports),
-	entryPoints: ["./lib/widget.ts"],
-	outfile: "./src/quak/widget.js",
 	bundle: true,
 	format: "esm",
 	sourcemap: "inline",
@@ -50,29 +55,20 @@ let options: esbuild.BuildOptions = {
 };
 
 if (Deno.args.includes("--watch")) {
-	let ctx = await esbuild.context(options);
+	let ctx = await esbuild.context({ ...shared, ...entries[0] });
 	await ctx.watch();
 } else {
 	if (Deno.args.includes("--bundle")) {
 		// Remove the importmap aliases and defer to Deno
 		// loader to download and bundle deps locally
-		delete options.alias;
-		delete options.sourcemap;
-		options.minify = true;
-		options.plugins = [...denoPlugins({
+		delete shared.alias;
+		delete shared.sourcemap;
+		shared.minify = true;
+		shared.plugins = [...denoPlugins({
 			importMapURL: new URL("deno.json", root).href,
 		})];
 	}
-	await esbuild.build(options);
-
-	await Deno.copyFile(
-		new URL("src/quak/widget.js", root),
-		new URL("cli/src/static/widget.js", root),
-	);
-
-	console.log(
-		`\n  Copied src/quak/%cwidget.js to %c${"cli/src/static/widget.js"}`,
-		"font-weight: bold",
-		"color: cyan",
-	);
+	for (let entry of entries) {
+		await esbuild.build({ ...shared, ...entry });
+	}
 }

@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import { timeInterval, type TimeUnit } from "@uwdata/mosaic-sql";
+import { timeInterval, type TimeUnit } from "./time-interval.ts";
 import type { Bin } from "../types.ts";
 
 const formatMap: Record<TimeUnit, (date: Date) => string> = {
@@ -10,7 +10,6 @@ const formatMap: Record<TimeUnit, (date: Date) => string> = {
 	"hour": d3.timeFormat("%H:%M"),
 	"day": d3.timeFormat("%b %d"),
 	"month": d3.timeFormat("%b %Y"),
-	"quarter": d3.timeFormat("%b %Y"),
 	"year": d3.timeFormat("%Y"),
 };
 
